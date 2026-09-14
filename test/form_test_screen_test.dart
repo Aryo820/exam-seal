@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:examseal/models/exam_sessions.dart';
 import 'package:examseal/screens/form_test_screen.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +16,7 @@ void main() {
 
     var testRuns = 0;
     var readySaves = 0;
+    final saveResult = Completer<bool>();
     bool? result;
     await tester.pumpWidget(
       MaterialApp(
@@ -40,7 +43,7 @@ void main() {
                         },
                         confirmFormReady: () {
                           readySaves++;
-                          return true;
+                          return saveResult.future;
                         },
                       ),
                     ),
@@ -78,7 +81,29 @@ void main() {
     await tester.ensureVisible(confirmButton);
     await tester.pump();
     expect(tester.widget<FilledButton>(confirmButton).onPressed, isNotNull);
+    await tester.ensureVisible(find.text('Buka Uji Form'));
+    await tester.pump();
+    await tester.tap(find.text('Buka Uji Form'));
+    await tester.pump();
+    expect(testRuns, 2);
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+    for (var index = 0; index < 6; index++) {
+      final checkbox = find.byType(Checkbox).at(index);
+      expect(tester.widget<Checkbox>(checkbox).value, isFalse);
+      await tester.ensureVisible(checkbox);
+      await tester.pump();
+      await tester.tap(checkbox);
+      await tester.pump();
+    }
+    await tester.ensureVisible(confirmButton);
+    await tester.pump();
     await tester.tap(confirmButton);
+    await tester.pump();
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.byType(FormTestScreen), findsOneWidget);
+    expect(result, isNull);
+    saveResult.complete(true);
     await tester.pumpAndSettle();
 
     expect(readySaves, 1);

@@ -1,9 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import '../widgets/restricted_form_view.dart';
 
 import '../models/exam_sessions.dart';
+import '../services/attempt_state_machine.dart';
 import 'completion_approval_screen.dart';
 import 'ended_screen.dart';
 
@@ -11,100 +12,115 @@ import 'ended_screen.dart';
 class ExamScreen extends StatefulWidget {
   const ExamScreen({
     required this.session,
+    required this.violationCount,
+    required this.violationReason,
     required this.verifySupervisorPin,
-    required this.onEndExam,
+    required this.registerViolation,
+    required this.recordAmbiguousEvent,
+    required this.onViolationLock,
+    required this.endAttemptWithAuthorization,
     required this.retryRestoreSettings,
     required this.onReturnHome,
     this.formContent,
-    this.violationCount = 0,
-    this.violationReason,
     super.key,
-  }) : assert(violationCount >= 0 && violationCount <= 2),
-       assert(violationCount == 0 || violationReason != null);
+  });
 
   final ExamSession session;
+  final int violationCount;
+  final String? violationReason;
   final FutureOr<bool> Function(String pin) verifySupervisorPin;
 
-  /// Persists the ended state, restores protections, then returns restoration status.
-  final FutureOr<bool> Function() onEndExam;
+  /// Mendaftarkan pelanggaran terbukti ke controller; hasilnya menentukan
+  /// overlay peringatan atau penguncian.
+  final Future<ViolationResultMsg> Function(String trigger) registerViolation;
+
+  /// Mencatat event ambigu (panggilan, jaringan, fokus) tanpa counter.
+  final Future<void> Function(String type) recordAmbiguousEvent;
+
+  /// Dipanggil saat pelanggaran mencapai ambang: state locked sudah
+  /// dipersist controller, UI berpindah ke layar terkunci.
+  final Future<void> Function() onViolationLock;
+
+  /// Persist state berakhir lalu pulihkan proteksi; mengembalikan status
+  /// pemulihan pengaturan yang sebenarnya. Dipanggil setelah PIN pengawas
+  /// diverifikasi di CompletionApprovalScreen.
+  final Future<bool> Function() endAttemptWithAuthorization;
+
   final FutureOr<bool> Function() retryRestoreSettings;
   final VoidCallback onReturnHome;
   final Widget? formContent;
-  final int violationCount;
-  final String? violationReason;
 
   @override
   State<ExamScreen> createState() => _ExamScreenState();
 }
 
-class _ExamScreenState extends State<ExamScreen> {
-  WebViewController? _webViewController;
-  int _progress = 0;
-  String? _error;
+/// Pesan hasil pelanggaran dari controller untuk UI.
+class ViolationResultMsg {
+  const ViolationResultMsg({
+    required this.outcome,
+    required this.violationCount,
+    required this.reason,
+  });
+  final ViolationOutcome outcome;
+  final int violationCount;
+  final String reason;
+}
+
+class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
   String? _notice;
   bool _warningAcknowledged = false;
   bool _ending = false;
 
-  bool get _showWarning => widget.violationCount > 0 && !_warningAcknowledged;
+  int _violationCount = 0;
+  String? _violationReason;
 
   @override
   void initState() {
     super.initState();
-    if (widget.formContent == null) _createWebView();
+    WidgetsBinding.instance.addObserver(this);
+    _violationCount = widget.violationCount;
+    _violationReason = widget.violationReason;
   }
 
-  void _createWebView() {
-    try {
-      final controller = WebViewController()
-        ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(Colors.white)
-        ..setNavigationDelegate(
-          NavigationDelegate(
-            onProgress: (progress) {
-              if (mounted) setState(() => _progress = progress);
-            },
-            onPageStarted: (_) {
-              if (mounted) setState(() => _error = null);
-            },
-            onWebResourceError: (error) {
-              if (error.isForMainFrame == false || !mounted) return;
-              setState(
-                () => _error =
-                    'Form gagal dimuat. Periksa koneksi lalu coba lagi.',
-              );
-            },
-            onNavigationRequest: (request) {
-              final target = Uri.tryParse(request.url);
-              if (target != null && _allowsNavigation(target)) {
-                return NavigationDecision.navigate;
-              }
-              if (mounted) {
-                setState(
-                  () => _notice = 'Tautan di luar Google Forms diblokir.',
-                );
-              }
-              return NavigationDecision.prevent;
-            },
-          ),
-        );
-      _webViewController = controller;
-      unawaited(
-        controller.loadRequest(widget.session.formUrl).catchError((_) {
-          if (mounted) {
-            setState(
-              () =>
-                  _error = 'Form gagal dimuat. Periksa koneksi lalu coba lagi.',
-            );
-          }
-        }),
-      );
-    } catch (_) {
-      _error = 'WebView tidak tersedia pada perangkat ini.';
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      // Pemicu terbukti dalam matriks: aplikasi ditinggalkan saat attempt
+      // aktif (pengguna berpindah aplikasi, bukan sekadar kehilangan fokus
+      // sesaat karena dialog milik aplikasi).
+      unawaited(_registerViolation('appLeftWhileActive'));
+    } else if (state == AppLifecycleState.inactive) {
+      // Dialog OS/notifikasi sesaat: event ambigu, dicatat tanpa counter.
+      unawaited(widget.recordAmbiguousEvent('focusLost'));
     }
   }
 
-  bool _allowsNavigation(Uri target) =>
-      target.scheme == 'https' && target.host == widget.session.formUrl.host;
+  bool get _showWarning =>
+      _violationCount > 0 && _violationCount < 3 && !_warningAcknowledged;
+
+  /// Pemicu terbukti dari matriks deteksi: aplikasi ditinggalkan saat
+  /// attempt aktif (mis. siswa berpindah aplikasi). Dipanggil observer
+  /// di composition root; dipercaya hanya untuk pemicu dalam matriks.
+  Future<void> _registerViolation(String trigger) async {
+    final result = await widget.registerViolation(trigger);
+    if (!mounted) return;
+    if (result.outcome == ViolationOutcome.locked) {
+      await widget.onViolationLock();
+      return;
+    }
+    setState(() {
+      _violationCount = result.violationCount;
+      _violationReason = result.reason;
+      _warningAcknowledged = false;
+    });
+  }
 
   Future<void> _requestCompletion() async {
     if (_ending) return;
@@ -112,7 +128,7 @@ class _ExamScreenState extends State<ExamScreen> {
       MaterialPageRoute<bool>(
         builder: (_) => CompletionApprovalScreen(
           session: widget.session,
-          violationCount: widget.violationCount,
+          violationCount: _violationCount,
           verifySupervisorPin: widget.verifySupervisorPin,
         ),
       ),
@@ -121,7 +137,7 @@ class _ExamScreenState extends State<ExamScreen> {
 
     setState(() => _ending = true);
     try {
-      final settingsRestored = await widget.onEndExam();
+      final settingsRestored = await widget.endAttemptWithAuthorization();
       if (!mounted) return;
       setState(() => _ending = false);
       await Navigator.of(context).pushReplacement<void, void>(
@@ -149,7 +165,13 @@ class _ExamScreenState extends State<ExamScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final form = widget.formContent ?? _buildWebView();
+    final form =
+        widget.formContent ??
+        RestrictedFormView(
+          url: widget.session.formUrl,
+          onNetworkError: () =>
+              unawaited(widget.recordAmbiguousEvent('networkLost')),
+        );
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -163,7 +185,7 @@ class _ExamScreenState extends State<ExamScreen> {
                 children: [
                   _Header(
                     session: widget.session,
-                    violationCount: widget.violationCount,
+                    violationCount: _violationCount,
                   ),
                   if (_notice != null)
                     MaterialBanner(
@@ -175,10 +197,6 @@ class _ExamScreenState extends State<ExamScreen> {
                         ),
                       ],
                     ),
-                  if (_progress < 100 &&
-                      _error == null &&
-                      widget.formContent == null)
-                    LinearProgressIndicator(value: _progress / 100),
                   Expanded(child: form),
                   _CompletionAction(
                     onPressed: _ending ? null : _requestCompletion,
@@ -189,8 +207,8 @@ class _ExamScreenState extends State<ExamScreen> {
               if (_showWarning)
                 Positioned.fill(
                   child: _ViolationWarning(
-                    count: widget.violationCount,
-                    reason: widget.violationReason!,
+                    count: _violationCount,
+                    reason: _violationReason ?? 'Peringatan pelanggaran',
                     onAcknowledged: () {
                       setState(() => _warningAcknowledged = true);
                     },
@@ -201,31 +219,6 @@ class _ExamScreenState extends State<ExamScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildWebView() {
-    if (_error != null) {
-      return _LoadError(
-        message: _error!,
-        onRetry: () {
-          setState(() {
-            _error = null;
-            _progress = 0;
-          });
-          final controller = _webViewController;
-          if (controller == null) {
-            _createWebView();
-          } else {
-            unawaited(controller.loadRequest(widget.session.formUrl));
-          }
-        },
-      );
-    }
-    final controller = _webViewController;
-    if (controller == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    return WebViewWidget(controller: controller);
   }
 }
 
@@ -439,30 +432,6 @@ class _CompletionAction extends StatelessWidget {
           ),
         ),
       ],
-    ),
-  );
-}
-
-class _LoadError extends StatelessWidget {
-  const _LoadError({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.wifi_off_outlined, size: 32),
-          const SizedBox(height: 12),
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          OutlinedButton(onPressed: onRetry, child: const Text('Coba Lagi')),
-        ],
-      ),
     ),
   );
 }

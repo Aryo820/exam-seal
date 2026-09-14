@@ -2,6 +2,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Akses Notification Policy (DND) untuk pengendalian notifikasi
+         saat ujian; diminta lewat pengaturan atas aksi eksplisit
+         pengguna, bukan otomatis (PRD FR09). -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
         android:allowBackup="false"
