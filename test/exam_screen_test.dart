@@ -176,7 +176,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('third violation hides the exam and calls the lock route', (
+  testWidgets('lifecycle ambigu tidak menghitung pelanggaran atau mengunci', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 884);
@@ -185,6 +185,8 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     var locked = false;
+    var registered = 0;
+    var ambiguousEvents = 0;
     await tester.pumpWidget(
       MaterialApp(
         home: ExamScreen(
@@ -193,12 +195,17 @@ void main() {
           violationReason: null,
           verifySupervisorPin: (_) => false,
           cancelEndAuthorization: () {},
-          registerViolation: (trigger) async => const ViolationResultMsg(
-            outcome: ViolationOutcome.locked,
-            violationCount: 3,
-            reason: 'appLeftWhileActive',
-          ),
-          recordAmbiguousEvent: (_) async {},
+          registerViolation: (trigger) async {
+            registered++;
+            return const ViolationResultMsg(
+              outcome: ViolationOutcome.locked,
+              violationCount: 3,
+              reason: 'appLeftWhileActive',
+            );
+          },
+          recordAmbiguousEvent: (_) async {
+            ambiguousEvents++;
+          },
           onViolationLock: () async {
             locked = true;
           },
@@ -214,9 +221,12 @@ void main() {
     );
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     await tester.pumpAndSettle();
 
-    expect(locked, isTrue);
+    expect(locked, isFalse);
+    expect(registered, 0);
+    expect(ambiguousEvents, 2);
     expect(tester.takeException(), isNull);
   });
 }

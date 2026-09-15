@@ -273,6 +273,45 @@ void main() {
     },
   );
 
+  test('gagal mencatat pelanggaran tidak mengubah attempt atau log', () async {
+    final db = await factory.openDatabase(inMemoryDatabasePath);
+    openDbs.add(db);
+    final store = await SessionStore.open(db);
+    final controller = ExamSessionController(
+      store: store,
+      secrets: TeacherSessionSecrets.inMemory(),
+      now: DateTime.now,
+    );
+    final created = await controller.createTeacherSession(
+      examName: 'Matematika Kelas XI',
+      formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+    );
+    controller.attachProtectionStub(
+      screenProtectionReady: true,
+      notificationControlReady: true,
+    );
+    await controller.startStudentAttempt(created.session);
+    await db.execute('''
+      CREATE TRIGGER reject_violation_update
+      BEFORE UPDATE ON attempts
+      WHEN NEW.violation_count > OLD.violation_count
+      BEGIN SELECT RAISE(FAIL, 'simulasi gagal simpan'); END
+    ''');
+
+    await expectLater(
+      controller.registerViolation('appLeftWhileActive'),
+      throwsA(isA<StorageFailure>()),
+    );
+
+    final current = await controller.loadCurrentAttempt();
+    expect(current!.state, AttemptState.active);
+    expect(current.violationCount, 0);
+    expect(
+      current.events.where((event) => event.eventType == 'appLeftWhileActive'),
+      isEmpty,
+    );
+  });
+
   test('PIN cooldown persists across controller restarts', () async {
     final db = await factory.openDatabase(inMemoryDatabasePath);
     openDbs.add(db);

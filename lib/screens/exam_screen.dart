@@ -95,37 +95,17 @@ class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
-      // Pemicu terbukti dalam matriks: aplikasi ditinggalkan saat attempt
-      // aktif (pengguna berpindah aplikasi, bukan sekadar kehilangan fokus
-      // sesaat karena dialog milik aplikasi).
-      unawaited(_registerViolation('appLeftWhileActive'));
-    } else if (state == AppLifecycleState.inactive) {
-      // Dialog OS/notifikasi sesaat: event ambigu, dicatat tanpa counter.
+      // Lifecycle tidak membuktikan pengguna berpindah aplikasi: panggilan
+      // atau dialog OS dapat menghasilkan sinyal yang sama.
       unawaited(widget.recordAmbiguousEvent('focusLost'));
     }
   }
 
   bool get _showWarning =>
       _violationCount > 0 && _violationCount < 3 && !_warningAcknowledged;
-
-  /// Pemicu terbukti dari matriks deteksi: aplikasi ditinggalkan saat
-  /// attempt aktif (mis. siswa berpindah aplikasi). Dipanggil observer
-  /// di composition root; dipercaya hanya untuk pemicu dalam matriks.
-  Future<void> _registerViolation(String trigger) async {
-    final result = await widget.registerViolation(trigger);
-    if (!mounted) return;
-    if (result.outcome == ViolationOutcome.locked) {
-      await widget.onViolationLock();
-      return;
-    }
-    setState(() {
-      _violationCount = result.violationCount;
-      _violationReason = result.reason;
-      _warningAcknowledged = false;
-    });
-  }
 
   Future<void> _requestCompletion() async {
     if (_ending) return;

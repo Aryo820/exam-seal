@@ -533,10 +533,12 @@ class ExamSessionController {
     final storedSession = current?.session;
     if (current == null ||
         storedSession == null ||
-        current.sessionId != session.sessionId)
+        current.sessionId != session.sessionId) {
       return false;
-    if (!await _verifyPinInScope(pin, storedSession, current.attemptId))
+    }
+    if (!await _verifyPinInScope(pin, storedSession, current.attemptId)) {
       return false;
+    }
     _endAuthorizationAttemptId = current.attemptId;
     return true;
   }
@@ -545,8 +547,9 @@ class ExamSessionController {
   /// attempt aktif. Token tetap hanya berlaku satu kali dan tidak persisten.
   Future<bool> authorizeEndAfterVerifiedPin() async {
     final current = await _store.loadCurrentAttempt();
-    if (current == null || _verifiedPinAttemptId != current.attemptId)
+    if (current == null || _verifiedPinAttemptId != current.attemptId) {
       return false;
+    }
     _verifiedPinAttemptId = null;
     _endAuthorizationAttemptId = current.attemptId;
     return true;
