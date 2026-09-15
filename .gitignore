@@ -44,6 +44,7 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-design.md
-ExamSeal_PRD_MVP.md
-PROMPT_IMPLEMENTASI_MVP.md
+/design.md
+/ExamSeal_PRD_MVP.md
+/PROMPT_IMPLEMENTASI_MVP.md
+/.scratch/
