@@ -403,7 +403,8 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       protectionNotice: _protectionNotice,
       violationCount: current.violationCount,
       violationReason: current.violationReason,
-      verifySupervisorPin: _verifySupervisorPin,
+      verifySupervisorPin: (pin) => controller.authorizeEnd(pin, session),
+      cancelEndAuthorization: controller.cancelEndAuthorization,
       registerViolation: (trigger) async {
         final result = await controller.registerViolation(trigger);
         return ViolationResultMsg(
@@ -443,6 +444,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       verifySupervisorPin: _verifySupervisorPin,
       onContinueExam: _continueProtectedAttempt,
       onEndExam: () async {
+        if (!await controller.authorizeEndAfterVerifiedPin()) return;
         final restored = await controller.finishAttemptAfterPin(
           reason: 'Diakhiri pengawas dari ujian terkunci.',
         );
@@ -463,6 +465,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       verifySupervisorPin: _verifySupervisorPin,
       onContinueExam: _continueProtectedAttempt,
       onEndExam: () async {
+        if (!await controller.authorizeEndAfterVerifiedPin()) return;
         final restored = await controller.finishAttemptAfterPin(
           reason: 'Diakhiri pengawas setelah pemulihan aplikasi.',
         );

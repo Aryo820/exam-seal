@@ -11,12 +11,14 @@ class CompletionApprovalScreen extends StatefulWidget {
     required this.session,
     required this.violationCount,
     required this.verifySupervisorPin,
+    required this.cancelEndAuthorization,
     super.key,
   });
 
   final ExamSession session;
   final int violationCount;
   final FutureOr<bool> Function(String pin) verifySupervisorPin;
+  final VoidCallback cancelEndAuthorization;
 
   @override
   State<CompletionApprovalScreen> createState() =>
@@ -75,7 +77,11 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
         ],
       ),
     );
-    if (confirmed == true && mounted) Navigator.of(context).pop(true);
+    if (confirmed == true && mounted) {
+      Navigator.of(context).pop(true);
+    } else {
+      widget.cancelEndAuthorization();
+    }
   }
 
   @override

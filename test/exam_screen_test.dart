@@ -33,6 +33,7 @@ void main() {
           violationCount: 0,
           violationReason: null,
           verifySupervisorPin: (pin) => pin == '01234',
+          cancelEndAuthorization: () {},
           registerViolation: (trigger) async => const ViolationResultMsg(
             outcome: ViolationOutcome.warned,
             violationCount: 1,
@@ -141,6 +142,7 @@ void main() {
           violationCount: 1,
           violationReason: 'Anda meninggalkan layar ujian.',
           verifySupervisorPin: (_) => false,
+          cancelEndAuthorization: () {},
           registerViolation: (trigger) async => const ViolationResultMsg(
             outcome: ViolationOutcome.warned,
             violationCount: 1,
@@ -190,6 +192,7 @@ void main() {
           violationCount: 0,
           violationReason: null,
           verifySupervisorPin: (_) => false,
+          cancelEndAuthorization: () {},
           registerViolation: (trigger) async => const ViolationResultMsg(
             outcome: ViolationOutcome.locked,
             violationCount: 3,

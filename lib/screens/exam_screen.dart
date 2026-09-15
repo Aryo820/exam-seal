@@ -16,6 +16,7 @@ class ExamScreen extends StatefulWidget {
     required this.violationCount,
     required this.violationReason,
     required this.verifySupervisorPin,
+    required this.cancelEndAuthorization,
     required this.registerViolation,
     required this.recordAmbiguousEvent,
     required this.onViolationLock,
@@ -31,6 +32,7 @@ class ExamScreen extends StatefulWidget {
   final int violationCount;
   final String? violationReason;
   final FutureOr<bool> Function(String pin) verifySupervisorPin;
+  final VoidCallback cancelEndAuthorization;
 
   /// Mendaftarkan pelanggaran terbukti ke controller; hasilnya menentukan
   /// overlay peringatan atau penguncian.
@@ -133,6 +135,7 @@ class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
           session: widget.session,
           violationCount: _violationCount,
           verifySupervisorPin: widget.verifySupervisorPin,
+          cancelEndAuthorization: widget.cancelEndAuthorization,
         ),
       ),
     );

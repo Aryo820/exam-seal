@@ -96,6 +96,8 @@ class ExamSessionController {
   /// membungkus MethodChannel; di test di-stub lewat attachProtectionStub.
   ExamProtectionBridge? _protection;
   bool _startingStudentAttempt = false;
+  String? _endAuthorizationAttemptId;
+  String? _verifiedPinAttemptId;
 
   ExamProtectionBridge? get protection => _protection;
 
@@ -516,8 +518,38 @@ class ExamSessionController {
   Future<bool> verifySupervisorPin(String pin, ExamSession session) async {
     final current = await _store.loadCurrentAttempt();
     final scopeId = current?.attemptId ?? session.sessionId;
-    return _verifyPinInScope(pin, session, scopeId);
+    final verified = await _verifyPinInScope(pin, session, scopeId);
+    if (verified && current != null) _verifiedPinAttemptId = current.attemptId;
+    return verified;
   }
+
+  /// Otorisasi khusus untuk mengakhiri attempt aktif. Hanya berlaku sekali
+  /// dalam proses aplikasi ini; restart tidak dapat memulihkan otorisasi.
+  Future<bool> authorizeEnd(String pin, ExamSession session) async {
+    final current = await _store.loadCurrentAttempt();
+    final storedSession = current?.session;
+    if (current == null ||
+        storedSession == null ||
+        current.sessionId != session.sessionId)
+      return false;
+    if (!await _verifyPinInScope(pin, storedSession, current.attemptId))
+      return false;
+    _endAuthorizationAttemptId = current.attemptId;
+    return true;
+  }
+
+  /// Dipakai sesudah layar keputusan yang sudah memverifikasi PIN untuk
+  /// attempt aktif. Token tetap hanya berlaku satu kali dan tidak persisten.
+  Future<bool> authorizeEndAfterVerifiedPin() async {
+    final current = await _store.loadCurrentAttempt();
+    if (current == null || _verifiedPinAttemptId != current.attemptId)
+      return false;
+    _verifiedPinAttemptId = null;
+    _endAuthorizationAttemptId = current.attemptId;
+    return true;
+  }
+
+  void cancelEndAuthorization() => _endAuthorizationAttemptId = null;
 
   Future<bool> _verifyPinInScope(
     String pin,
@@ -637,23 +669,23 @@ class ExamSessionController {
   Future<bool> finishAttemptAfterPin({required String reason}) async {
     final current = await _store.loadCurrentAttempt();
     if (current == null) return false;
+    if (_endAuthorizationAttemptId != current.attemptId) return false;
+    _endAuthorizationAttemptId = null;
 
-    await _store.setAttemptEndReason(current.attemptId, reason);
-    await _store.setAttemptState(
-      current.attemptId,
-      AttemptState.ended,
-      violationCount: current.violationCount,
-    );
-    await _store.recordSupervisorAction(
+    await _store.endAttemptWithSupervisorAction(
       attemptId: current.attemptId,
-      actionType: 'end',
-      result: 'ended',
+      violationCount: current.violationCount,
+      reason: reason,
     );
 
     var restored = false;
     final protection = _protection;
     if (protection != null) {
-      restored = await protection.restore();
+      try {
+        restored = await protection.restore();
+      } catch (_) {
+        restored = false;
+      }
       if (restored) await _store.clearPendingRestore(current.attemptId);
     }
     return restored;
@@ -701,23 +733,21 @@ class ExamSessionController {
     }
 
     // Persist berakhir SEBELUM melepas proteksi.
-    await _store.setAttemptEndReason(current.attemptId, reason);
-    await _store.setAttemptState(
-      current.attemptId,
-      AttemptState.ended,
-      violationCount: current.violationCount,
-    );
-    await _store.recordSupervisorAction(
+    await _store.endAttemptWithSupervisorAction(
       attemptId: current.attemptId,
-      actionType: 'end',
-      result: 'ended',
+      violationCount: current.violationCount,
+      reason: reason,
     );
 
     // Pulihkan pengaturan; kegagalan dilaporkan jujur.
     var restored = false;
     final protection = _protection;
     if (protection != null) {
-      restored = await protection.restore();
+      try {
+        restored = await protection.restore();
+      } catch (_) {
+        restored = false;
+      }
       if (restored) await _store.clearPendingRestore(current.attemptId);
     }
     return (

@@ -569,6 +569,37 @@ class SessionStore {
     });
   });
 
+  /// State akhir, alasan, dan audit pengawas harus tersimpan bersama sebelum
+  /// pemanggil melepas pengaturan perangkat.
+  Future<void> endAttemptWithSupervisorAction({
+    required String attemptId,
+    required int violationCount,
+    required String reason,
+  }) => _guard('mengakhiri attempt dengan otorisasi', () async {
+    final now = DateTime.now();
+    await _db.transaction((txn) async {
+      await txn.update(
+        'attempts',
+        {
+          'state': AttemptState.ended.name,
+          'violation_count': violationCount,
+          'ended_reason': reason,
+          'ended_at': now.millisecondsSinceEpoch,
+          'updated_at': now.millisecondsSinceEpoch,
+        },
+        where: 'attempt_id = ?',
+        whereArgs: [attemptId],
+      );
+      await txn.insert('supervisor_actions', {
+        'action_id': 'action-$attemptId-$now-end'.replaceAll(' ', '_'),
+        'attempt_id': attemptId,
+        'action_type': 'end',
+        'authorized_at': now.millisecondsSinceEpoch,
+        'result': 'ended',
+      });
+    });
+  });
+
   // ---- Status proteksi ----
 
   /// Disimpan sebelum native mengubah FLAG_SECURE/DND. Bila proses mati pada
