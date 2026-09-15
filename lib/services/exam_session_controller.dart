@@ -468,6 +468,14 @@ class ExamSessionController {
     if (current == null) {
       throw StateError('Tidak ada attempt aktif.');
     }
+    if (!AttemptStateMachine.countedViolationTriggers.contains(triggerType)) {
+      throw ArgumentError.value(
+        triggerType,
+        'triggerType',
+        'Pemicu tidak terverifikasi.',
+      );
+    }
+    final correlationId = 'corr-${_now().millisecondsSinceEpoch}';
     final machine = AttemptStateMachine.restored(
       state: current.state,
       initialViolationCount: AttemptStateMachine.initialViolationLimit,
@@ -476,17 +484,12 @@ class ExamSessionController {
     final outcome = machine.registerViolation(reason: triggerType);
     final newState = machine.state;
 
-    await _store.recordEvent(
+    await _store.recordViolation(
       attemptId: current.attemptId,
       eventType: triggerType,
-      countedAsViolation: true,
       counterAfter: machine.violationCount,
-      correlationId: 'corr-${_now().millisecondsSinceEpoch}',
-    );
-    await _store.setAttemptState(
-      current.attemptId,
-      newState,
-      violationCount: machine.violationCount,
+      state: newState,
+      correlationId: correlationId,
     );
 
     return ViolationResult(

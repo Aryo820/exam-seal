@@ -542,6 +542,37 @@ class SessionStore {
     });
   });
 
+  Future<void> recordViolation({
+    required String attemptId,
+    required String eventType,
+    required int counterAfter,
+    required AttemptState state,
+    required String correlationId,
+  }) => _guard('mencatat pelanggaran', () async {
+    final now = DateTime.now();
+    await _db.transaction((txn) async {
+      await txn.insert('session_events', {
+        'event_id': 'event-$attemptId-$now-${eventType.hashCode.abs()}',
+        'attempt_id': attemptId,
+        'event_type': eventType,
+        'occurred_at': now.millisecondsSinceEpoch,
+        'counted_as_violation': 1,
+        'counter_after': counterAfter,
+        'correlation_id': correlationId,
+      });
+      await txn.update(
+        'attempts',
+        {
+          'state': state.name,
+          'violation_count': counterAfter,
+          'updated_at': now.millisecondsSinceEpoch,
+        },
+        where: 'attempt_id = ?',
+        whereArgs: [attemptId],
+      );
+    });
+  });
+
   StoredEvent _eventFromRow(Map<String, Object?> row) => StoredEvent(
     eventId: row['event_id'] as String,
     attemptId: row['attempt_id'] as String,
