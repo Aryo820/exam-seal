@@ -150,6 +150,12 @@ class SessionStore {
         )
       ''');
       await db.execute('''
+        CREATE TABLE IF NOT EXISTS prepared_protection_activations (
+          session_id TEXT PRIMARY KEY,
+          prepared_at INTEGER NOT NULL
+        )
+      ''');
+      await db.execute('''
         CREATE TABLE IF NOT EXISTS pin_attempt_status (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           attempt_id TEXT NOT NULL,
@@ -325,6 +331,64 @@ class SessionStore {
       'ended_at': null,
       'ended_reason': null,
       'updated_at': now.millisecondsSinceEpoch,
+    });
+    return attemptId;
+  });
+
+  /// Tulis attempt aktif dan penanda pemulihan dalam satu transaksi. Pemanggil
+  /// wajib menyiapkan [prepareProtectionActivation] sebelum mengubah OS.
+  Future<String> startProtectedAttempt(
+    ExamSession session, {
+    required int attemptNumber,
+    required bool secureWindowActive,
+    required bool notificationProtectionActive,
+    required bool notificationAccessGranted,
+  }) => _guard('memulai attempt terlindungi', () async {
+    final now = DateTime.now();
+    final attemptId =
+        'attempt-${session.sessionId}-$attemptNumber-${now.millisecondsSinceEpoch}';
+    await _db.transaction((txn) async {
+      final current = await txn.query(
+        'attempts',
+        columns: ['attempt_id'],
+        where: 'state IN (?, ?, ?)',
+        whereArgs: [
+          AttemptState.active.name,
+          AttemptState.locked.name,
+          AttemptState.recoveryPending.name,
+        ],
+        limit: 1,
+      );
+      if (current.isNotEmpty) {
+        throw StorageFailure('Masih ada attempt ujian yang belum selesai.');
+      }
+      await txn.insert('attempts', {
+        'attempt_id': attemptId,
+        'session_id': session.sessionId,
+        'attempt_number': attemptNumber,
+        'state': AttemptState.active.name,
+        'violation_count': 0,
+        'started_at': now.millisecondsSinceEpoch,
+        'ended_at': null,
+        'ended_reason': null,
+        'updated_at': now.millisecondsSinceEpoch,
+      });
+      await txn.insert('protection_states', {
+        'attempt_id': attemptId,
+        'secure_window_state': secureWindowActive ? 'active' : 'inactive',
+        'notification_protection_state': notificationProtectionActive
+            ? 'active'
+            : 'inactive',
+        'notification_access_granted': notificationAccessGranted ? 1 : 0,
+        'restore_pending': 1,
+        'restore_data': jsonEncode(const {'owned': 'examseal'}),
+        'last_checked_at': now.millisecondsSinceEpoch,
+      });
+      await txn.delete(
+        'prepared_protection_activations',
+        where: 'session_id = ?',
+        whereArgs: [session.sessionId],
+      );
     });
     return attemptId;
   });
@@ -506,6 +570,35 @@ class SessionStore {
   });
 
   // ---- Status proteksi ----
+
+  /// Disimpan sebelum native mengubah FLAG_SECURE/DND. Bila proses mati pada
+  /// celah ini, boot masih tahu bahwa native perlu dipulihkan.
+  Future<void> prepareProtectionActivation(ExamSession session) => _guard(
+    'menyiapkan pemulihan proteksi',
+    () => _db.insert('prepared_protection_activations', {
+      'session_id': session.sessionId,
+      'prepared_at': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.replace),
+  );
+
+  Future<String?> loadPreparedProtectionSessionId() =>
+      _guard('memuat persiapan proteksi', () async {
+        final rows = await _db.query(
+          'prepared_protection_activations',
+          orderBy: 'prepared_at ASC',
+          limit: 1,
+        );
+        return rows.isEmpty ? null : rows.first['session_id'] as String;
+      });
+
+  Future<void> clearPreparedProtectionActivation(String sessionId) => _guard(
+    'menghapus persiapan proteksi',
+    () => _db.delete(
+      'prepared_protection_activations',
+      where: 'session_id = ?',
+      whereArgs: [sessionId],
+    ),
+  );
 
   Future<void> saveProtectionState({
     required String attemptId,

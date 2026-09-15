@@ -6,14 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   ExamSession session() => ExamSession(
-        schemaVersion: 2,
-        sessionId: 's',
-        sessionCode: 'MTH-7K2P',
-        examName: 'Matematika Kelas XI',
-        formUrl: Uri.parse('https://docs.google.com/forms/d/e/example/viewform'),
-        pinSalt: 'c2FsdA==',
-        pinVerifier: 'dmVyaWZpZXI=',
-      );
+    schemaVersion: 2,
+    sessionId: 's',
+    sessionCode: 'MTH-7K2P',
+    examName: 'Matematika Kelas XI',
+    formUrl: Uri.parse('https://docs.google.com/forms/d/e/example/viewform'),
+    pinSalt: 'c2FsdA==',
+    pinVerifier: 'dmVyaWZpZXI=',
+  );
 
   testWidgets('S04 keeps the exam visible until supervisor approval', (
     tester,
@@ -22,6 +22,8 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    final protectionNotice = ValueNotifier<String?>(null);
+    addTearDown(protectionNotice.dispose);
 
     var ended = false;
     await tester.pumpWidget(
@@ -48,6 +50,7 @@ void main() {
             color: Colors.white,
             child: Center(child: Text('Google Forms')),
           ),
+          protectionNotice: protectionNotice,
         ),
       ),
     );
@@ -56,6 +59,13 @@ void main() {
     expect(find.text('MTH-7K2P'), findsOneWidget);
     expect(find.text('Pelanggaran: 0'), findsOneWidget);
     expect(find.text('Google Forms'), findsOneWidget);
+    protectionNotice.value =
+        'Proteksi perangkat tidak lagi aktif. Minta pengawas menangani perangkat ini.';
+    await tester.pump();
+    expect(
+      find.textContaining('Proteksi perangkat tidak lagi aktif'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Minta Persetujuan Selesai'));
     await tester.pumpAndSettle();
@@ -200,9 +210,7 @@ void main() {
       ),
     );
 
-    tester.binding.handleAppLifecycleStateChanged(
-      AppLifecycleState.paused,
-    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await tester.pumpAndSettle();
 
     expect(locked, isTrue);

@@ -27,14 +27,30 @@ class PreExamScreen extends StatefulWidget {
   State<PreExamScreen> createState() => _PreExamScreenState();
 }
 
-class _PreExamScreenState extends State<PreExamScreen> {
+class _PreExamScreenState extends State<PreExamScreen>
+    with WidgetsBindingObserver {
   ReadinessReport? _readiness;
   bool _starting = false;
+  bool _settingsOpened = false;
   String? _startError;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !_settingsOpened) return;
+    _settingsOpened = false;
     unawaited(_load());
   }
 
@@ -42,11 +58,15 @@ class _PreExamScreenState extends State<PreExamScreen> {
     try {
       final readiness = await widget.loadReadiness();
       if (!mounted) return;
-      setState(() => _readiness = readiness);
+      setState(() {
+        _readiness = readiness;
+        _startError = null;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(
-        () => _startError = 'Pemeriksaan kesiapan gagal. Minta bantuan pengawas.',
+        () =>
+            _startError = 'Pemeriksaan kesiapan gagal. Minta bantuan pengawas.',
       );
     }
   }
@@ -66,6 +86,20 @@ class _PreExamScreenState extends State<PreExamScreen> {
       );
     } finally {
       if (mounted) setState(() => _starting = false);
+    }
+  }
+
+  Future<void> _openNotificationSettings() async {
+    _settingsOpened = true;
+    try {
+      await widget.onOpenNotificationSettings();
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _startError =
+              'Pengaturan notifikasi tidak dapat dibuka. Minta bantuan pengawas.',
+        );
+      }
     }
   }
 
@@ -128,7 +162,9 @@ class _PreExamScreenState extends State<PreExamScreen> {
               label: 'QR sesi',
               status: readiness == null
                   ? 'Memeriksa...'
-                  : (readiness.qrValid ? 'Lolos pemeriksaan' : 'QR tidak valid'),
+                  : (readiness.qrValid
+                        ? 'Lolos pemeriksaan'
+                        : 'QR tidak valid'),
               ready: readiness?.qrValid ?? false,
             ),
             _ReadinessRow(
@@ -137,8 +173,8 @@ class _PreExamScreenState extends State<PreExamScreen> {
               status: readiness == null
                   ? 'Memeriksa...'
                   : (readiness.urlValid
-                      ? 'Lolos pemeriksaan'
-                      : 'Tautan tidak valid'),
+                        ? 'Lolos pemeriksaan'
+                        : 'Tautan tidak valid'),
               ready: readiness?.urlValid ?? false,
             ),
             _ReadinessRow(
@@ -147,8 +183,8 @@ class _PreExamScreenState extends State<PreExamScreen> {
               status: readiness == null
                   ? 'Memeriksa...'
                   : (readiness.screenProtectionReady
-                      ? 'Aktif di perangkat ini'
-                      : 'Belum tersedia'),
+                        ? 'Dapat diaktifkan saat mulai'
+                        : 'Belum tersedia'),
               ready: readiness?.screenProtectionReady ?? false,
             ),
             _ReadinessRow(
@@ -157,13 +193,14 @@ class _PreExamScreenState extends State<PreExamScreen> {
               status: readiness == null
                   ? 'Memeriksa...'
                   : (readiness.notificationControlReady
-                      ? 'Akses diberikan'
-                      : 'Akses belum diberikan'),
+                        ? 'Akses diberikan; diuji lagi saat mulai'
+                        : 'Akses belum diberikan'),
               ready: readiness?.notificationControlReady ?? false,
-              onActionLabel: readiness != null && !readiness.notificationControlReady
+              onActionLabel:
+                  readiness != null && !readiness.notificationControlReady
                   ? 'Buka Pengaturan'
                   : null,
-              onAction: widget.onOpenNotificationSettings,
+              onAction: _openNotificationSettings,
             ),
             _ReadinessRow(
               icon: Icons.save_outlined,
@@ -171,8 +208,8 @@ class _PreExamScreenState extends State<PreExamScreen> {
               status: readiness == null
                   ? 'Memeriksa...'
                   : (readiness.storageWritable
-                      ? 'Dapat menyimpan sesi'
-                      : 'Penyimpanan gagal'),
+                        ? 'Dapat menyimpan sesi'
+                        : 'Penyimpanan gagal'),
               ready: readiness?.storageWritable ?? false,
             ),
             const SizedBox(height: 16),
@@ -187,7 +224,7 @@ class _PreExamScreenState extends State<PreExamScreen> {
                   Expanded(
                     child: Text(
                       allReady
-                          ? 'Semua pemeriksaan wajib lolos. Pastikan kode sesi cocok sebelum mulai.'
+                          ? 'Semua pemeriksaan wajib lolos. Proteksi diaktifkan dan diperiksa ulang sebelum soal tampil.'
                           : 'Perangkat belum siap. Minta bantuan pengawas atau gunakan ujian alternatif.',
                       style: const TextStyle(fontSize: 14, height: 1.5),
                     ),
@@ -252,7 +289,7 @@ class _PreExamScreenState extends State<PreExamScreen> {
             ],
             const SizedBox(height: 12),
             const Text(
-              'Ujian hanya dapat dimulai setelah semua pemeriksaan wajib lolos.',
+              'DND dan FLAG_SECURE tidak menjamin panel sistem tertutup pada semua HP. Perangkat yang belum terbukti harus memakai ujian alternatif.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -315,11 +352,7 @@ class _ReadinessRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       status,
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.4,
-                        color: color,
-                      ),
+                      style: TextStyle(fontSize: 14, height: 1.4, color: color),
                     ),
                   ],
                 ),
@@ -357,21 +390,21 @@ class _Rule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 28,
-              child: Text(
-                '$number.',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-            ),
-            Expanded(
-              child: Text(text, style: const TextStyle(fontSize: 16, height: 1.5)),
-            ),
-          ],
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 28,
+          child: Text(
+            '$number.',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
         ),
-      );
+        Expanded(
+          child: Text(text, style: const TextStyle(fontSize: 16, height: 1.5)),
+        ),
+      ],
+    ),
+  );
 }

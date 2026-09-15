@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../widgets/restricted_form_view.dart';
 
@@ -22,6 +23,7 @@ class ExamScreen extends StatefulWidget {
     required this.retryRestoreSettings,
     required this.onReturnHome,
     this.formContent,
+    this.protectionNotice,
     super.key,
   });
 
@@ -49,6 +51,7 @@ class ExamScreen extends StatefulWidget {
   final FutureOr<bool> Function() retryRestoreSettings;
   final VoidCallback onReturnHome;
   final Widget? formContent;
+  final ValueListenable<String?>? protectionNotice;
 
   @override
   State<ExamScreen> createState() => _ExamScreenState();
@@ -196,6 +199,21 @@ class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
                           child: const Text('Tutup'),
                         ),
                       ],
+                    ),
+                  if (widget.protectionNotice != null)
+                    ValueListenableBuilder<String?>(
+                      valueListenable: widget.protectionNotice!,
+                      builder: (_, notice, _) => notice == null
+                          ? const SizedBox.shrink()
+                          : MaterialBanner(
+                              content: Text(notice),
+                              actions: [
+                                TextButton(
+                                  onPressed: _requestCompletion,
+                                  child: const Text('Pengawas'),
+                                ),
+                              ],
+                            ),
                     ),
                   Expanded(child: form),
                   _CompletionAction(

@@ -28,8 +28,7 @@ class ProtectionStatus {
 /// tidak pernah memanggil native channel secara langsung — semua lewat
 /// kelas ini (dikonsumsi ExamSessionController/ExamProtectionBridge).
 class ExamProtection implements ExamProtectionBridge {
-  ExamProtection({void Function(String message)? onLog})
-    : _onLog = onLog;
+  ExamProtection({void Function(String message)? onLog}) : _onLog = onLog;
 
   static const _channel = MethodChannel('examseal/protection');
 
@@ -39,8 +38,7 @@ class ExamProtection implements ExamProtectionBridge {
   ProtectionStatus? _lastStatus;
 
   @override
-  bool get screenProtectionReady =>
-      _lastStatus?.supported == true && (_lastStatus?.secureWindowActive ?? false);
+  bool get screenProtectionReady => _lastStatus?.supported == true;
 
   @override
   bool get notificationControlReady =>
@@ -88,7 +86,9 @@ class ExamProtection implements ExamProtectionBridge {
   @override
   Future<bool> isReady() async {
     final status = await checkStatus();
-    return status.supported && status.secureWindowActive;
+    // FLAG_SECURE baru aktif saat Mulai Ujian; preflight hanya memeriksa
+    // apakah perangkat mendukungnya dan akses DND sudah diberikan.
+    return status.supported && status.notificationAccessGranted;
   }
 
   /// Aktifkan FLAG_SECURE dan pengendalian notifikasi DND milik aplikasi.
@@ -101,8 +101,13 @@ class ExamProtection implements ExamProtectionBridge {
       return false;
     }
     final ok = await _invoke<bool>('activate');
-    await checkStatus();
-    return ok == true;
+    final activated = await checkStatus();
+    final verified =
+        ok == true &&
+        activated.secureWindowActive &&
+        activated.notificationProtectionActive;
+    if (!verified) await restore();
+    return verified;
   }
 
   /// Lepas proteksi dan pulihkan pengaturan yang diubah aplikasi.
@@ -113,8 +118,8 @@ class ExamProtection implements ExamProtectionBridge {
   @override
   Future<bool> restore() async {
     final ok = await _invoke<bool>('restore');
-    await checkStatus();
-    return ok == true;
+    final status = await checkStatus();
+    return ok == true && !status.secureWindowActive;
   }
 
   /// Buka halaman pengaturan akses Notification Policy atas aksi eksplisit

@@ -45,9 +45,12 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
   ExamSessionController get controller => widget.controller;
 
   final _navigatorKey = GlobalKey<NavigatorState>();
+  final _protectionNotice = ValueNotifier<String?>(null);
 
   StoredAttempt? _current;
   bool _booting = true;
+  bool _retryingRecovery = false;
+  String? _bootRecoveryError;
 
   @override
   void initState() {
@@ -59,6 +62,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _protectionNotice.dispose();
     super.dispose();
   }
 
@@ -71,10 +75,20 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
     } on StorageFailure {
       // Retensi gagal bukan alasan menahan siswa; boot tetap lanjut.
     }
+    var restored = false;
     try {
-      await controller.resolvePendingRestores();
-    } on StorageFailure {
-      // Pemulihan tertunda gagal dicoba; EndedScreen menyediakan retry.
+      restored = await controller.resolvePendingRestores();
+    } catch (_) {
+      restored = false;
+    }
+    if (!restored) {
+      if (!mounted) return;
+      setState(() {
+        _booting = false;
+        _bootRecoveryError =
+            'Pemulihan proteksi perangkat diperlukan. Minta pengawas memeriksa perangkat ini sebelum ujian dilanjutkan.';
+      });
+      return;
     }
     try {
       final current = await controller.loadCurrentAttempt();
@@ -88,7 +102,10 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       _current = null;
     }
     if (!mounted) return;
-    setState(() => _booting = false);
+    setState(() {
+      _booting = false;
+      _bootRecoveryError = null;
+    });
   }
 
   @override
@@ -106,14 +123,25 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
         _current!.state != AttemptState.locked) {
       return;
     }
-    await protection.refreshOnResume();
-    if (!mounted) return;
-    // Akses dicabut saat ujian → event ambigu tercatat, pengawas menangani.
-    final status = await protection.checkStatus();
-    if (!status.notificationAccessGranted) {
-      await controller.recordAmbiguousEvent('notificationAccessRevoked');
+    String? notice;
+    try {
+      final status = await protection.refreshOnResume();
+      if (!status.notificationAccessGranted) {
+        await controller.recordAmbiguousEvent('notificationAccessRevoked');
+        notice =
+            'Akses pengendalian notifikasi dicabut. Status ujian dipertahankan; minta pengawas menangani perangkat ini.';
+      } else if (!status.secureWindowActive ||
+          !status.notificationProtectionActive) {
+        await controller.recordAmbiguousEvent('protectionRefreshFailed');
+        notice =
+            'Proteksi perangkat tidak lagi aktif. Status ujian dipertahankan; minta pengawas menangani perangkat ini.';
+      }
+    } catch (_) {
+      notice =
+          'Status proteksi tidak dapat diperiksa. Status ujian dipertahankan; minta pengawas menangani perangkat ini.';
     }
-    setState(() {});
+    if (!mounted) return;
+    _protectionNotice.value = notice;
   }
 
   Future<bool> _verifySupervisorPin(String pin) async {
@@ -136,6 +164,46 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
     _current = null;
     _push(_homeScreen());
   }
+
+  Future<void> _retryBootRecovery() async {
+    if (_retryingRecovery) return;
+    setState(() {
+      _retryingRecovery = true;
+      _booting = true;
+      _bootRecoveryError = null;
+    });
+    await _boot();
+    if (mounted) setState(() => _retryingRecovery = false);
+  }
+
+  Widget _bootRecoveryScreen() => Scaffold(
+    body: SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.warning_amber_outlined, size: 40),
+              const SizedBox(height: 16),
+              Text(
+                _bootRecoveryError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, height: 1.5),
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: _retryingRecovery ? null : _retryBootRecovery,
+                child: Text(
+                  _retryingRecovery ? 'Memulihkan...' : 'Coba Pulihkan',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 
   // ---- Beranda & mode guru ----
 
@@ -332,6 +400,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
     return ExamScreen(
       session: session,
       formContent: widget.formContent,
+      protectionNotice: _protectionNotice,
       violationCount: current.violationCount,
       violationReason: current.violationReason,
       verifySupervisorPin: _verifySupervisorPin,
@@ -372,12 +441,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       violationCount: current.violationCount,
       violationReason: AttemptStateMachine.describeTrigger(rawReason),
       verifySupervisorPin: _verifySupervisorPin,
-      onContinueExam: () async {
-        await controller.confirmContinueAfterPin();
-        _current = await controller.loadCurrentAttempt();
-        if (!mounted) return;
-        _push(_examScreen());
-      },
+      onContinueExam: _continueProtectedAttempt,
       onEndExam: () async {
         final restored = await controller.finishAttemptAfterPin(
           reason: 'Diakhiri pengawas dari ujian terkunci.',
@@ -397,12 +461,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       session: session,
       violationCount: current.violationCount,
       verifySupervisorPin: _verifySupervisorPin,
-      onContinueExam: () async {
-        await controller.confirmContinueAfterPin();
-        _current = await controller.loadCurrentAttempt();
-        if (!mounted) return;
-        _push(_examScreen());
-      },
+      onContinueExam: _continueProtectedAttempt,
       onEndExam: () async {
         final restored = await controller.finishAttemptAfterPin(
           reason: 'Diakhiri pengawas setelah pemulihan aplikasi.',
@@ -428,6 +487,25 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
         onReturnHome: _goHome,
       ),
     );
+  }
+
+  Future<void> _continueProtectedAttempt() async {
+    if (!await controller.confirmContinueAfterPin()) {
+      final context = _navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Proteksi perangkat gagal diaktifkan. Ujian tetap terkunci; minta pengawas menangani perangkat ini.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    _current = await controller.loadCurrentAttempt();
+    if (!mounted) return;
+    _push(_examScreen());
   }
 
   // ---- Pengulangan sesi berakhir ----
@@ -464,7 +542,9 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       navigatorKey: _navigatorKey,
       home: _booting
           ? const SplashPlaceholder()
-          : (_current != null ? _attemptShell() : _homeScreen()),
+          : (_bootRecoveryError != null
+                ? _bootRecoveryScreen()
+                : (_current != null ? _attemptShell() : _homeScreen())),
     );
   }
 

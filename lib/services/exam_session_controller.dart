@@ -95,6 +95,7 @@ class ExamSessionController {
   /// Proteksi native (ticket 05). Di produksi diisi ExamProtection yang
   /// membungkus MethodChannel; di test di-stub lewat attachProtectionStub.
   ExamProtectionBridge? _protection;
+  bool _startingStudentAttempt = false;
 
   ExamProtectionBridge? get protection => _protection;
 
@@ -325,60 +326,108 @@ class ExamSessionController {
     }
 
     final protection = _protection;
-    final protectionReady = protection != null && await protection.isReady();
+    var protectionReady = false;
+    try {
+      protectionReady = protection != null && await protection.isReady();
+    } catch (_) {
+      protectionReady = false;
+    }
 
     return ReadinessReport(
       qrValid: qrValid,
       urlValid: urlValid,
       storageWritable: storageWritable,
       screenProtectionReady:
-          protectionReady && protection.screenProtectionReady,
+          protectionReady && (protection?.screenProtectionReady ?? false),
       notificationControlReady:
-          protectionReady && protection.notificationControlReady,
+          protectionReady && (protection?.notificationControlReady ?? false),
     );
   }
 
   /// Mulai attempt siswa: hanya bila semua kesiapan wajib lolos.
   /// Urutan: aktifkan proteksi → persist attempt active → kembalikan rute.
   Future<StartAttemptResult> startStudentAttempt(ExamSession session) async {
-    final readiness = await assessReadiness(session);
-    if (!readiness.allMandatoryPassed) {
-      return StartAttemptResult(
+    if (_startingStudentAttempt) {
+      return const StartAttemptResult(
         started: false,
-        reason:
-            'Perangkat belum siap. Minta bantuan pengawas atau gunakan ujian alternatif.',
+        reason: 'Pemeriksaan mulai masih berlangsung.',
       );
     }
-
-    final protection = _protection;
-    if (protection == null || !await protection.activate()) {
-      return StartAttemptResult(
-        started: false,
-        reason:
-            'Proteksi perangkat gagal diaktifkan. Ujian tidak dapat dimulai.',
-      );
-    }
-
+    _startingStudentAttempt = true;
+    ExamProtectionBridge? protection;
+    var preparedProtection = false;
     try {
+      final readiness = await assessReadiness(session);
+      if (!readiness.allMandatoryPassed) {
+        return const StartAttemptResult(
+          started: false,
+          reason:
+              'Perangkat belum siap. Minta bantuan pengawas atau gunakan ujian alternatif.',
+        );
+      }
+      protection = _protection;
+      if (protection == null) {
+        return const StartAttemptResult(
+          started: false,
+          reason:
+              'Proteksi perangkat tidak tersedia. Ujian tidak dapat dimulai.',
+        );
+      }
+      if (await _store.loadCurrentAttempt() != null) {
+        return const StartAttemptResult(
+          started: false,
+          reason: 'Masih ada attempt ujian yang belum selesai.',
+        );
+      }
+      await _store.prepareProtectionActivation(session);
+      preparedProtection = true;
+      if (!await protection.activate()) {
+        await _cancelPreparedProtection(session, protection);
+        return const StartAttemptResult(
+          started: false,
+          reason:
+              'Proteksi perangkat gagal diaktifkan. Ujian tidak dapat dimulai.',
+        );
+      }
       final history = await _store.loadAttemptsFor(session.sessionId);
       final attemptNumber = history.length + 1;
-      final attemptId = await _store.startAttempt(
+      await _store.startProtectedAttempt(
         session,
         attemptNumber: attemptNumber,
-      );
-      await _store.saveProtectionState(
-        attemptId: attemptId,
         secureWindowActive: true,
         notificationProtectionActive: true,
         notificationAccessGranted: protection.notificationControlReady,
-        restorePending: true,
-        restoreData: const {'owned': 'examseal'},
       );
       return const StartAttemptResult(started: true);
     } on StorageFailure catch (e) {
       // Persist gagal: jangan beri akses soal; coba lepas proteksi.
-      await protection.deactivate();
+      if (preparedProtection && protection != null) {
+        await _cancelPreparedProtection(session, protection);
+      }
       return StartAttemptResult(started: false, reason: e.toString());
+    } catch (_) {
+      if (preparedProtection && protection != null) {
+        await _cancelPreparedProtection(session, protection);
+      }
+      return const StartAttemptResult(
+        started: false,
+        reason: 'Pemeriksaan kesiapan gagal. Ujian tidak dapat dimulai.',
+      );
+    } finally {
+      _startingStudentAttempt = false;
+    }
+  }
+
+  Future<void> _cancelPreparedProtection(
+    ExamSession session,
+    ExamProtectionBridge protection,
+  ) async {
+    try {
+      if (await protection.deactivate()) {
+        await _store.clearPreparedProtectionActivation(session.sessionId);
+      }
+    } catch (_) {
+      // Penanda tetap tersimpan agar boot dapat mencoba pemulihan lagi.
     }
   }
 
@@ -530,35 +579,57 @@ class ExamSessionController {
     if (!ok) {
       return const AuthorizationResult(authorized: false, wrongPin: true);
     }
-    await _store.setAttemptState(
-      current.attemptId,
-      AttemptState.active,
-      violationCount: current.violationCount,
+    return AuthorizationResult(
+      authorized: await _continueWithProtection(current),
     );
-    await _store.recordSupervisorAction(
-      attemptId: current.attemptId,
-      actionType: 'continue',
-      result: 'resumed',
-    );
-    return const AuthorizationResult(authorized: true);
   }
 
   /// Selesaikan aksi Lanjutkan SETELAH layar PIN mengotorisasi: state
   /// active pada attempt yang sama, counter tetap. Dipisah dari
   /// [supervisorContinue] karena layar PIN sudah memverifikasi PIN.
-  Future<void> confirmContinueAfterPin() async {
+  Future<bool> confirmContinueAfterPin() async {
     final current = await _store.loadCurrentAttempt();
-    if (current == null) return;
-    await _store.setAttemptState(
-      current.attemptId,
-      AttemptState.active,
-      violationCount: current.violationCount,
-    );
-    await _store.recordSupervisorAction(
-      attemptId: current.attemptId,
-      actionType: 'continue',
-      result: 'resumed',
-    );
+    if (current == null) return false;
+    return _continueWithProtection(current);
+  }
+
+  Future<bool> _continueWithProtection(StoredAttempt current) async {
+    final session = current.session;
+    final protection = _protection;
+    if (session == null || protection == null) return false;
+
+    var prepared = false;
+    try {
+      await _store.prepareProtectionActivation(session);
+      prepared = true;
+      if (!await protection.activate()) {
+        await _cancelPreparedProtection(session, protection);
+        return false;
+      }
+      await _store.saveProtectionState(
+        attemptId: current.attemptId,
+        secureWindowActive: true,
+        notificationProtectionActive: true,
+        notificationAccessGranted: protection.notificationControlReady,
+        restorePending: true,
+        restoreData: const {'owned': 'examseal'},
+      );
+      await _store.setAttemptState(
+        current.attemptId,
+        AttemptState.active,
+        violationCount: current.violationCount,
+      );
+      await _store.recordSupervisorAction(
+        attemptId: current.attemptId,
+        actionType: 'continue',
+        result: 'resumed',
+      );
+      await _store.clearPreparedProtectionActivation(session.sessionId);
+      return true;
+    } catch (_) {
+      if (prepared) await _cancelPreparedProtection(session, protection);
+      return false;
+    }
   }
 
   /// Selesaikan aksi Akhiri SETELAH layar PIN mengotorisasi: persist
@@ -583,7 +654,7 @@ class ExamSessionController {
     final protection = _protection;
     if (protection != null) {
       restored = await protection.restore();
-      await _store.clearPendingRestore(current.attemptId);
+      if (restored) await _store.clearPendingRestore(current.attemptId);
     }
     return restored;
   }
@@ -647,7 +718,7 @@ class ExamSessionController {
     final protection = _protection;
     if (protection != null) {
       restored = await protection.restore();
-      await _store.clearPendingRestore(current.attemptId);
+      if (restored) await _store.clearPendingRestore(current.attemptId);
     }
     return (
       authorization: const AuthorizationResult(authorized: true),
@@ -732,6 +803,12 @@ class ExamSessionController {
   /// tertunda setelah sesi berakhir — state berakhir tidak boleh membuat
   /// pemulihan yang belum selesai diabaikan (PRD FR12).
   Future<bool> resolvePendingRestores() async {
+    final preparedSessionId = await _store.loadPreparedProtectionSessionId();
+    if (preparedSessionId != null) {
+      final protection = _protection;
+      if (protection == null || !await protection.restore()) return false;
+      await _store.clearPreparedProtectionActivation(preparedSessionId);
+    }
     final pendingId = await _store.loadPendingRestoreAttemptId();
     if (pendingId == null) return true;
     final protection = _protection;

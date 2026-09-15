@@ -11,7 +11,10 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   sqfliteFfiInit();
 
-  Future<ExamSessionController> seededController(Database db) async {
+  Future<ExamSessionController> seededController(
+    Database db, {
+    bool restoreSucceeds = true,
+  }) async {
     final store = await SessionStore.open(db);
     final controller = ExamSessionController(
       store: store,
@@ -21,6 +24,7 @@ void main() {
     controller.attachProtectionStub(
       screenProtectionReady: true,
       notificationControlReady: true,
+      restoreSucceeds: restoreSucceeds,
     );
     return controller;
   }
@@ -126,5 +130,39 @@ void main() {
 
     expect(find.text('Pilih mode'), findsOneWidget);
     await db.close();
+  });
+
+  testWidgets('pemulihan proteksi gagal menahan akses sebelum soal tampil', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = await databaseFactoryFfiNoIsolate.openDatabase(
+      inMemoryDatabasePath,
+    );
+    addTearDown(db.close);
+    final a = await seededController(db);
+    final created = (await tester.runAsync(
+      () => a.createTeacherSession(
+        examName: 'Matematika Kelas XI',
+        formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+      ),
+    ))!;
+    expect((await a.startStudentAttempt(created.session)).started, isTrue);
+
+    final b = await seededController(db, restoreSucceeds: false);
+    await tester.pumpWidget(ExamApp(controller: b));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Pemulihan proteksi perangkat diperlukan'),
+      findsOneWidget,
+    );
+    expect(find.text('Pilih mode'), findsNothing);
+    expect(find.byType(ProcessRecoveryScreen), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

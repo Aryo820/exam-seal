@@ -24,14 +24,30 @@ import io.flutter.plugin.common.MethodChannel
  */
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "examseal/protection"
-
-    // Pengaturan milik pengguna yang berubah karena aplikasi, disimpan
-    // agar hanya pengaturan milik aplikasi yang dipulihkan.
-    private var previousInterruptionFilter: Int? = null
-    private var ownedDndRules = false
+    private val protectionPreferences by lazy {
+        getSharedPreferences("examseal_protection", Context.MODE_PRIVATE)
+    }
 
     private val notificationManager: NotificationManager
         get() = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    private fun previousInterruptionFilter(): Int? =
+        if (protectionPreferences.contains("previous_interruption_filter")) {
+            protectionPreferences.getInt("previous_interruption_filter", 0)
+        } else {
+            null
+        }
+
+    private fun ownsDndChange(): Boolean =
+        protectionPreferences.getBoolean("owns_dnd_change", false)
+
+    /** Commit sinkron sebelum DND diubah, supaya crash tidak melupakan nilai pengguna. */
+    private fun prepareDndRestore(filter: Int): Boolean = protectionPreferences.edit()
+        .putInt("previous_interruption_filter", filter)
+        .putBoolean("owns_dnd_change", true)
+        .commit()
+
+    private fun clearDndRestore(): Boolean = protectionPreferences.edit().clear().commit()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -69,7 +85,7 @@ class MainActivity : FlutterFragmentActivity() {
             false
         }
 
-    private fun checkStatus(): Map<String, Any> {
+    private fun checkStatus(): Map<String, Any?> {
         if (!isSupported()) {
             return mapOf(
                 "supported" to false,
@@ -101,35 +117,47 @@ class MainActivity : FlutterFragmentActivity() {
      * Aktifkan proteksi: FLAG_SECURE + kontribusi DND sesuai aturan milik
      * aplikasi. Mengembalikan false bila akses Notification Policy belum
      * diberikan — readiness harus gagal dan tombol mulai tetap nonaktif.
-     * Pengaturan sebelumnya disimpan agar hanya milik aplikasi yang
-     * dipulihkan saat attempt berakhir.
+     * Pengaturan sebelumnya dicommit sebelum filter diubah, sehingga crash
+     * tidak menghilangkan data pemulihan.
      */
     private fun activate(): Boolean {
         if (!isSupported() || !isNotificationPolicyAccessGranted()) {
             return false
         }
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-
         val currentFilter = notificationManager.getCurrentInterruptionFilter()
-        if (previousInterruptionFilter == null) {
-            previousInterruptionFilter = currentFilter
-        }
         // Pada target API 35+, perubahan DND aplikasi berkontribusi lewat
         // aturan milik aplikasi; filter langsung hanya untuk perangkat
         // lebih lama yang masih mengizinkannya.
         if (currentFilter == NotificationManager.INTERRUPTION_FILTER_ALL) {
+            if (!prepareDndRestore(currentFilter)) {
+                return false
+            }
             try {
                 notificationManager.setInterruptionFilter(
                     NotificationManager.INTERRUPTION_FILTER_PRIORITY
                 )
-                ownedDndRules = true
+                if (notificationManager.getCurrentInterruptionFilter() ==
+                    NotificationManager.INTERRUPTION_FILTER_ALL
+                ) {
+                    clearDndRestore()
+                    return false
+                }
             } catch (_: SecurityException) {
-                // Beberapa vendor membatasi perubahan filter; proteksi
-                // notifikasi dilaporkan tidak aktif secara jujur.
-                ownedDndRules = false
+                if (notificationManager.getCurrentInterruptionFilter() == currentFilter) {
+                    clearDndRestore()
+                }
+                return false
+            } catch (_: RuntimeException) {
+                if (notificationManager.getCurrentInterruptionFilter() == currentFilter) {
+                    clearDndRestore()
+                }
+                return false
             }
         }
-        return true
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        return window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0 &&
+            notificationManager.getCurrentInterruptionFilter() !=
+                NotificationManager.INTERRUPTION_FILTER_ALL
     }
 
     /**
@@ -141,20 +169,30 @@ class MainActivity : FlutterFragmentActivity() {
     private fun restore(): Boolean {
         var restored = true
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0) {
+            restored = false
+        }
 
-        val previous = previousInterruptionFilter
-        if (previous != null && ownedDndRules) {
+        val previous = previousInterruptionFilter()
+        if (previous != null && ownsDndChange()) {
             try {
-                notificationManager.setInterruptionFilter(previous)
+                // Bila filter telah berubah ke nilai lain, hormati perubahan
+                // pengguna/aplikasi lain dan jangan menimpanya.
+                if (notificationManager.getCurrentInterruptionFilter() ==
+                    NotificationManager.INTERRUPTION_FILTER_PRIORITY
+                ) {
+                    notificationManager.setInterruptionFilter(previous)
+                    if (notificationManager.getCurrentInterruptionFilter() != previous) {
+                        restored = false
+                    }
+                }
             } catch (_: SecurityException) {
                 restored = false
             } catch (_: RuntimeException) {
                 restored = false
             }
         }
-        previousInterruptionFilter = null
-        ownedDndRules = false
-        return restored
+        return restored && clearDndRestore()
     }
 
     /** Buka pengaturan akses Notification Policy atas aksi eksplisit. */
