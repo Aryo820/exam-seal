@@ -12,13 +12,13 @@ class RestrictedFormView extends StatefulWidget {
     required this.url,
     this.onInspected,
     this.onBlocked,
-    this.onNetworkError,
+    this.onOperationalIssue,
     super.key,
   });
   final Uri url;
   final ValueChanged<bool>? onInspected;
   final VoidCallback? onBlocked;
-  final VoidCallback? onNetworkError;
+  final ValueChanged<String>? onOperationalIssue;
   @override
   State<RestrictedFormView> createState() => _RestrictedFormViewState();
 }
@@ -57,6 +57,23 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
     widget.onBlocked?.call();
   }
 
+  void _reportOperationalIssue(String type) =>
+      widget.onOperationalIssue?.call(type);
+
+  void _networkInterrupted() {
+    if (!mounted) return;
+    if (!_visible) {
+      _fail(
+        'Form gagal dimuat. Periksa koneksi lalu coba lagi bersama pengawas.',
+      );
+      return;
+    }
+    setState(
+      () => _notice =
+          'Koneksi terputus. Halaman yang sudah terbuka tetap dipertahankan. Jangan memuat ulang sebelum pengawas memeriksa.',
+    );
+  }
+
   Future<void> _open() async {
     try {
       final controller = WebViewController();
@@ -87,6 +104,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
             }
             _blocked();
             if (uri?.host == 'accounts.google.com') {
+              _reportOperationalIssue('formUnavailable');
               _fail('Form meminta login Google dan tidak sesuai pilot.');
             }
             return NavigationDecision.prevent;
@@ -112,13 +130,23 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
           onPageFinished: (url) => unawaited(_inspect(url)),
           onWebResourceError: (error) {
             if (error.isForMainFrame == false) return;
-            widget.onNetworkError?.call();
-            _fail(
-              'Form gagal dimuat. Periksa koneksi lalu coba lagi bersama pengawas.',
+            final rendererLost = error.description.toLowerCase().contains(
+              'renderer process gone',
             );
+            _reportOperationalIssue(
+              rendererLost ? 'webViewFailed' : 'networkLost',
+            );
+            if (rendererLost) {
+              _fail(
+                'Form gagal dimuat. Periksa koneksi lalu coba lagi bersama pengawas.',
+              );
+            } else {
+              _networkInterrupted();
+            }
           },
           onHttpError: (error) {
             if (error.request?.uri.toString() != _currentUrl) return;
+            _reportOperationalIssue('formUnavailable');
             _fail('Server Form mengembalikan kesalahan. Hubungi pengawas.');
           },
         ),
@@ -127,6 +155,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
       setState(() => _controller = controller);
       await controller.loadRequest(widget.url);
     } catch (_) {
+      _reportOperationalIssue('webViewFailed');
       _fail(
         'WebView tidak tersedia atau gagal disiapkan. Coba lagi bersama pengawas.',
       );
@@ -157,6 +186,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
       if (!mounted || version != _pageVersion) return;
       if (result['upload'] == true ||
           (result['hasForm'] != true && !uri.path.endsWith('/formResponse'))) {
+        _reportOperationalIssue('formUnavailable');
         _fail(
           'Form ditutup, meminta login, atau memerlukan fitur di luar pilot. Hubungi pengawas.',
         );
@@ -207,6 +237,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
     try {
       await _controller!.loadRequest(target);
     } catch (_) {
+      _reportOperationalIssue('networkLost');
       _fail('Form gagal dimuat ulang. Hubungi pengawas.');
     }
   }
@@ -222,6 +253,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
               onPressed: () => setState(() => _notice = null),
               child: const Text('Tutup'),
             ),
+            TextButton(onPressed: _retry, child: const Text('Muat Ulang')),
           ],
         ),
       if (_progress < 100 && _error == null)

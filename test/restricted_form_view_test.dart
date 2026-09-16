@@ -222,6 +222,128 @@ void main() {
   );
 
   testWidgets(
+    'jaringan putus pada halaman aktif tercatat tanpa memuat ulang otomatis',
+    (tester) async {
+      final events = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RestrictedFormView(
+              url: Uri.parse(form),
+              onOperationalIssue: events.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      platform.delegate.started(form);
+      platform.delegate.finished(form);
+      await tester.pumpAndSettle();
+      expect(find.text('Form native'), findsOneWidget);
+
+      platform.delegate.resourceError(
+        const WebResourceError(
+          errorCode: -1,
+          description: 'Koneksi terputus',
+          isForMainFrame: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(events, ['networkLost']);
+      expect(find.text('Form native'), findsOneWidget);
+      expect(find.textContaining('Koneksi terputus'), findsOneWidget);
+      expect(platform.controller.loaded, [form]);
+      platform.delegate.finished(form);
+      await tester.pumpAndSettle();
+      expect(platform.controller.loaded, [form]);
+
+      await tester.tap(find.text('Muat Ulang'));
+      await tester.pumpAndSettle();
+      expect(find.text('Muat ulang Form?'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'gangguan saat pengiriman dicatat dan pemulihan tetap meminta pengawas',
+    (tester) async {
+      final events = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RestrictedFormView(
+              url: Uri.parse(form),
+              onOperationalIssue: events.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      platform.delegate.started(form);
+      platform.delegate.finished(form);
+      await tester.pumpAndSettle();
+      const response = 'https://docs.google.com/forms/d/e/pilot/formResponse';
+      expect(
+        await platform.delegate.navigate(
+          const NavigationRequest(url: response, isMainFrame: true),
+        ),
+        NavigationDecision.navigate,
+      );
+      platform.delegate.started(response);
+      platform.delegate.resourceError(
+        const WebResourceError(
+          errorCode: -1,
+          description: 'Koneksi terputus saat mengirim',
+          isForMainFrame: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(events, ['networkLost']);
+      expect(find.text('Form native'), findsNothing);
+      expect(find.textContaining('Form gagal dimuat'), findsOneWidget);
+      await tester.tap(find.text('Coba Lagi'));
+      await tester.pumpAndSettle();
+      expect(find.text('Muat ulang Form?'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Form meminta login ditahan dan tercatat sebagai gangguan', (
+    tester,
+  ) async {
+    final events = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RestrictedFormView(
+            url: Uri.parse(form),
+            onOperationalIssue: events.add,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    platform.delegate.started(form);
+    platform.delegate.finished(form);
+    await tester.pumpAndSettle();
+
+    expect(
+      await platform.delegate.navigate(
+        const NavigationRequest(
+          url: 'https://accounts.google.com/ServiceLogin',
+          isMainFrame: true,
+        ),
+      ),
+      NavigationDecision.prevent,
+    );
+    await tester.pumpAndSettle();
+
+    expect(events, ['formUnavailable']);
+    expect(find.textContaining('meminta login Google'), findsOneWidget);
+    expect(find.text('Form native'), findsNothing);
+  });
+
+  testWidgets(
     'hasil inspeksi terlambat tidak membuka halaman baru; upload ditolak',
     (tester) async {
       var inspected = false;

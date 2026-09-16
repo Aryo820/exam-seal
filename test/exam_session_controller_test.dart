@@ -245,6 +245,34 @@ void main() {
   });
 
   test(
+    'gangguan Form dicatat tanpa menambah penghitung atau mengakhiri attempt',
+    () async {
+      final controller = await newController();
+      final created = await controller.createTeacherSession(
+        examName: 'Matematika Kelas XI',
+        formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+      );
+      controller.attachProtectionStub(
+        screenProtectionReady: true,
+        notificationControlReady: true,
+      );
+      await controller.startStudentAttempt(created.session);
+
+      expect(await controller.recordAmbiguousEvent('networkLost'), isTrue);
+      expect(await controller.recordAmbiguousEvent('webViewFailed'), isTrue);
+      expect(await controller.recordAmbiguousEvent('formUnavailable'), isTrue);
+
+      final attempt = (await controller.loadCurrentAttempt())!;
+      expect(attempt.state, AttemptState.active);
+      expect(attempt.violationCount, 0);
+      expect(
+        attempt.events.map((event) => event.eventType),
+        containsAll(['networkLost', 'webViewFailed', 'formUnavailable']),
+      );
+    },
+  );
+
+  test(
     'violations persist through controller; third locks; supervisor actions recorded',
     () async {
       final controller = await newController();

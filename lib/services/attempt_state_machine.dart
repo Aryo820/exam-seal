@@ -49,6 +49,8 @@ class AttemptStateMachine {
   static const Set<String> ambiguousEventTypes = {
     'incomingCall',
     'networkLost',
+    'webViewFailed',
+    'formUnavailable',
     'focusLost',
     'osDialog',
     'processDeath',
