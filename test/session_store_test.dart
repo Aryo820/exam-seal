@@ -159,6 +159,36 @@ void main() {
   });
 
   test(
+    'retention keeps an ended attempt with pending protection restore',
+    () async {
+      final store = await newStore();
+      await store.saveSession(session);
+      final attemptId = await store.startAttempt(session, attemptNumber: 1);
+      await store.setAttemptState(
+        attemptId,
+        AttemptState.ended,
+        violationCount: 0,
+      );
+      await store.setAttemptEndedAt(
+        attemptId,
+        DateTime.now().subtract(const Duration(days: 10)),
+      );
+      await store.saveProtectionState(
+        attemptId: attemptId,
+        secureWindowActive: true,
+        notificationProtectionActive: true,
+        notificationAccessGranted: true,
+        restorePending: true,
+      );
+
+      final deleted = await store.runRetention(now: DateTime.now());
+
+      expect(deleted, isNot(contains(attemptId)));
+      expect(await store.hasPendingRestore(), isTrue);
+    },
+  );
+
+  test(
     'a failed write surfaces an actionable error instead of a trusted new state',
     () async {
       final db = await factory.openDatabase(inMemoryDatabasePath);

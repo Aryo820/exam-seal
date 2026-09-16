@@ -183,6 +183,45 @@ void main() {
   );
 
   testWidgets(
+    'kehilangan proses WebView menahan Form sampai pengawas menyetujui muat ulang',
+    (tester) async {
+      var inspected = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RestrictedFormView(
+              url: Uri.parse(form),
+              onInspected: (value) => inspected = value,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      platform.delegate.started(form);
+      platform.delegate.finished(form);
+      await tester.pumpAndSettle();
+      expect(inspected, isTrue);
+      expect(find.text('Form native'), findsOneWidget);
+
+      platform.delegate.resourceError(
+        const WebResourceError(
+          errorCode: -1,
+          description: 'WebView renderer process gone',
+          isForMainFrame: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(inspected, isFalse);
+      expect(find.text('Form native'), findsNothing);
+      expect(find.textContaining('Form gagal dimuat'), findsOneWidget);
+      await tester.tap(find.text('Coba Lagi'));
+      await tester.pumpAndSettle();
+      expect(find.text('Muat ulang Form?'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'hasil inspeksi terlambat tidak membuka halaman baru; upload ditolak',
     (tester) async {
       var inspected = false;

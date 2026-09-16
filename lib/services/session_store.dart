@@ -425,10 +425,14 @@ class SessionStore {
   /// membuat attempt baru.
   Future<StoredAttempt?> loadCurrentAttempt() =>
       _guard('memuat attempt tersimpan', () async {
+        final statePlaceholders = List.filled(
+          AttemptState.values.length,
+          '?',
+        ).join(', ');
         final unknownStates = await _db.query(
           'attempts',
           columns: ['state'],
-          where: 'state NOT IN (?, ?, ?, ?, ?)',
+          where: 'state NOT IN ($statePlaceholders)',
           whereArgs: AttemptState.values.map((state) => state.name).toList(),
           limit: 1,
         );
@@ -807,7 +811,8 @@ class SessionStore {
 
   /// Pembersihan retensi: hapus HANYA attempt berakhir yang berumur lebih
   /// dari tujuh hari sejak berakhir, beserta event dan aksi pengawasnya.
-  /// Attempt aktif/terkunci/recoveryPending tidak pernah dihapus.
+  /// Attempt aktif/terkunci/recoveryPending atau pemulihan OS tertunda tidak
+  /// pernah dihapus.
   /// Mengembalikan daftar attemptId yang dihapus.
   Future<List<String>> runRetention({
     required DateTime now,
@@ -816,7 +821,12 @@ class SessionStore {
     final expired = await _db.query(
       'attempts',
       columns: ['attempt_id', 'session_id'],
-      where: 'state = ? AND ended_at IS NOT NULL AND ended_at < ?',
+      where: '''
+        state = ? AND ended_at IS NOT NULL AND ended_at < ?
+        AND attempt_id NOT IN (
+          SELECT attempt_id FROM protection_states WHERE restore_pending = 1
+        )
+      ''',
       whereArgs: [AttemptState.ended.name, cutoff],
     );
     final ids = expired.map((row) => row['attempt_id'] as String).toList();
