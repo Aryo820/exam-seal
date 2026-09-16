@@ -200,6 +200,24 @@ void main() {
     },
   );
 
+  test('attempt row rusak muncul sebagai kegagalan penyimpanan', () async {
+    final store = await newStore();
+    await store.saveSession(session);
+    final attemptId = await store.startAttempt(session, attemptNumber: 1);
+    final db = openDbs.single;
+    await db.update(
+      'attempts',
+      {'violation_count': 'bukan angka'},
+      where: 'attempt_id = ?',
+      whereArgs: [attemptId],
+    );
+
+    await expectLater(
+      store.loadCurrentAttempt(),
+      throwsA(isA<StorageFailure>()),
+    );
+  });
+
   test(
     'repeat by supervisor creates a fresh attempt while old history stays',
     () async {

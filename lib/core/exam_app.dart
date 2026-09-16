@@ -88,12 +88,9 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       restored = false;
     }
     if (!restored) {
-      if (!mounted) return;
-      setState(() {
-        _booting = false;
-        _bootRecoveryError =
-            'Pemulihan proteksi perangkat diperlukan. Minta pengawas memeriksa perangkat ini sebelum ujian dilanjutkan.';
-      });
+      _blockBoot(
+        'Pemulihan proteksi perangkat diperlukan. Minta pengawas memeriksa perangkat ini sebelum ujian dilanjutkan.',
+      );
       return;
     }
     try {

@@ -184,7 +184,7 @@ class SessionStore {
       return await body();
     } on StorageFailure {
       rethrow;
-    } on DatabaseException catch (e) {
+    } catch (e) {
       throw StorageFailure('Gagal $action: $e');
     }
   }
