@@ -14,6 +14,7 @@ class ProcessRecoveryScreen extends StatefulWidget {
     required this.verifySupervisorPin,
     required this.onContinueExam,
     required this.onEndExam,
+    this.onAuthorizationCancelled,
     super.key,
   }) : assert(violationCount >= 0);
 
@@ -22,6 +23,7 @@ class ProcessRecoveryScreen extends StatefulWidget {
   final FutureOr<bool> Function(String pin) verifySupervisorPin;
   final VoidCallback onContinueExam;
   final VoidCallback onEndExam;
+  final VoidCallback? onAuthorizationCancelled;
 
   @override
   State<ProcessRecoveryScreen> createState() => _ProcessRecoveryScreenState();
@@ -68,6 +70,8 @@ class _ProcessRecoveryScreenState extends State<ProcessRecoveryScreen> {
       widget.onContinueExam();
     } else if (decision == SupervisorDecision.endExam) {
       widget.onEndExam();
+    } else {
+      widget.onAuthorizationCancelled?.call();
     }
   }
 

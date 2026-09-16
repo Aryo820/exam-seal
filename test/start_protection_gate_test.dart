@@ -120,10 +120,18 @@ void main() {
     () async {
       final protection = _Protection();
       controller.attachProtection(protection);
-      final current = await session();
+      final created = await controller.createTeacherSession(
+        examName: 'Fisika',
+        formUrl: Uri.parse('https://docs.google.com/forms/d/e/pilot/viewform'),
+      );
+      final current = created.session;
       expect((await controller.startStudentAttempt(current)).started, isTrue);
       await controller.markProcessDeath();
 
+      expect(
+        await controller.verifySupervisorPin(created.pin, current),
+        isTrue,
+      );
       expect(await controller.confirmContinueAfterPin(), isTrue);
       expect(protection.activateCalls, 2);
       expect(
@@ -138,12 +146,20 @@ void main() {
     () async {
       final protection = _Protection();
       controller.attachProtection(protection);
-      final current = await session();
+      final created = await controller.createTeacherSession(
+        examName: 'Fisika',
+        formUrl: Uri.parse('https://docs.google.com/forms/d/e/pilot/viewform'),
+      );
+      final current = created.session;
       expect((await controller.startStudentAttempt(current)).started, isTrue);
       await controller.markProcessDeath();
       final failingProtection = _Protection(activationSucceeds: false);
       controller.attachProtection(failingProtection);
 
+      expect(
+        await controller.verifySupervisorPin(created.pin, current),
+        isTrue,
+      );
       expect(await controller.confirmContinueAfterPin(), isFalse);
       expect(failingProtection.activateCalls, 1);
       expect(

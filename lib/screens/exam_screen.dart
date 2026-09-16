@@ -88,6 +88,17 @@ class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
   }
 
   @override
+  void didUpdateWidget(covariant ExamScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.violationCount != oldWidget.violationCount ||
+        widget.violationReason != oldWidget.violationReason) {
+      _violationCount = widget.violationCount;
+      _violationReason = widget.violationReason;
+      _warningAcknowledged = false;
+    }
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

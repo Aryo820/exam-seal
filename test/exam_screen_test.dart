@@ -229,4 +229,61 @@ void main() {
     expect(ambiguousEvents, 2);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'status attempt baru memperbarui layar tanpa membuat ulang Form',
+    (tester) async {
+      var formInitializations = 0;
+
+      Widget screen(int violationCount) => MaterialApp(
+        home: ExamScreen(
+          key: const ValueKey('exam'),
+          session: session(),
+          violationCount: violationCount,
+          violationReason: 'Aplikasi ditinggalkan.',
+          verifySupervisorPin: (_) => false,
+          cancelEndAuthorization: () {},
+          registerViolation: (_) async => const ViolationResultMsg(
+            outcome: ViolationOutcome.warned,
+            violationCount: 1,
+            reason: 'appLeftWhileActive',
+          ),
+          recordAmbiguousEvent: (_) async {},
+          onViolationLock: () async {},
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          formContent: _StatefulForm(onInit: () => formInitializations++),
+        ),
+      );
+
+      await tester.pumpWidget(screen(2));
+      expect(formInitializations, 1);
+      expect(find.text('Pelanggaran: 2'), findsOneWidget);
+
+      await tester.pumpWidget(screen(3));
+      expect(formInitializations, 1);
+      expect(find.text('Pelanggaran: 3'), findsOneWidget);
+    },
+  );
+}
+
+class _StatefulForm extends StatefulWidget {
+  const _StatefulForm({required this.onInit});
+
+  final VoidCallback onInit;
+
+  @override
+  State<_StatefulForm> createState() => _StatefulFormState();
+}
+
+class _StatefulFormState extends State<_StatefulForm> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onInit();
+  }
+
+  @override
+  Widget build(BuildContext context) => const Text('Google Forms');
 }

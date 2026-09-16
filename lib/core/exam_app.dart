@@ -46,6 +46,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
 
   final _navigatorKey = GlobalKey<NavigatorState>();
   final _protectionNotice = ValueNotifier<String?>(null);
+  final _attemptView = ValueNotifier<StoredAttempt?>(null);
 
   StoredAttempt? _current;
   bool _booting = true;
@@ -63,6 +64,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _protectionNotice.dispose();
+    _attemptView.dispose();
     super.dispose();
   }
 
@@ -94,12 +96,12 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       final current = await controller.loadCurrentAttempt();
       if (current != null && current.state == AttemptState.active) {
         await controller.markProcessDeath();
-        _current = await controller.loadCurrentAttempt();
+        _setCurrent(await controller.loadCurrentAttempt());
       } else {
-        _current = current;
+        _setCurrent(current);
       }
     } on StorageFailure {
-      _current = null;
+      _setCurrent(null);
     }
     if (!mounted) return;
     setState(() {
@@ -160,8 +162,13 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
     );
   }
 
+  void _setCurrent(StoredAttempt? current) {
+    _current = current;
+    _attemptView.value = current;
+  }
+
   void _goHome() {
-    _current = null;
+    _setCurrent(null);
     _push(_homeScreen());
   }
 
@@ -331,7 +338,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
     if (result.error != null) {
       throw StorageFailure(result.error!);
     }
-    _current = await controller.loadCurrentAttempt();
+    _setCurrent(await controller.loadCurrentAttempt());
     if (!mounted) return;
     if (_current != null) {
       await _resumeStoredAttempt();
@@ -345,7 +352,8 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
           'Status sesi berubah. Scan ulang untuk memeriksa status terbaru.',
         );
       case ScanImportRoute.endedNeedsPin:
-        _push(_repeatScreen(scanned));
+        final previous = await controller.loadLastEndedAttemptFor(scanned);
+        _push(_repeatScreen(scanned, previous?.violationCount ?? 0));
       case null:
         throw StorageFailure('Sesi belum dapat dibuka. Coba scan ulang.');
     }
@@ -359,12 +367,10 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
     }
     switch (current.state) {
       case AttemptState.locked:
-        _push(_lockedScreen());
       case AttemptState.recoveryPending:
-        _push(_recoveryScreen());
       case AttemptState.active:
       case AttemptState.preExam:
-        _push(_examScreen());
+        _push(_attemptShell());
       case AttemptState.ended:
         _push(_homeScreen());
     }
@@ -387,8 +393,8 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
   Future<bool> _startAttempt(ExamSession session) async {
     final result = await controller.startStudentAttempt(session);
     if (!mounted || !result.started) return false;
-    _current = await controller.loadCurrentAttempt();
-    _push(_examScreen());
+    _setCurrent(await controller.loadCurrentAttempt());
+    _push(_attemptShell());
     return true;
   }
 
@@ -424,9 +430,8 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
   }
 
   Future<void> _onViolationLock() async {
-    _current = await controller.loadCurrentAttempt();
+    _setCurrent(await controller.loadCurrentAttempt());
     if (!mounted) return;
-    _push(_lockedScreen());
   }
 
   // ---- Terkunci ----
@@ -443,6 +448,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       violationReason: AttemptStateMachine.describeTrigger(rawReason),
       verifySupervisorPin: _verifySupervisorPin,
       onContinueExam: _continueProtectedAttempt,
+      onAuthorizationCancelled: controller.cancelSupervisorAuthorization,
       onEndExam: () async {
         if (!await controller.authorizeEndAfterVerifiedPin()) return;
         final restored = await controller.finishAttemptAfterPin(
@@ -464,6 +470,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       violationCount: current.violationCount,
       verifySupervisorPin: _verifySupervisorPin,
       onContinueExam: _continueProtectedAttempt,
+      onAuthorizationCancelled: controller.cancelSupervisorAuthorization,
       onEndExam: () async {
         if (!await controller.authorizeEndAfterVerifiedPin()) return;
         final restored = await controller.finishAttemptAfterPin(
@@ -480,7 +487,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
   }
 
   void _showEnded(ExamSession session, String reason, bool settingsRestored) {
-    _current = null;
+    _setCurrent(null);
     _push(
       EndedScreen(
         session: session,
@@ -506,25 +513,27 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       }
       return;
     }
-    _current = await controller.loadCurrentAttempt();
+    _setCurrent(await controller.loadCurrentAttempt());
     if (!mounted) return;
-    _push(_examScreen());
   }
 
   // ---- Pengulangan sesi berakhir ----
 
-  Widget _repeatScreen(ExamSession session) => RepeatSessionScreen(
-    session: session,
-    previousViolationCount: _current?.violationCount ?? 0,
-    verifySupervisorPin: (pin) => controller.verifySupervisorPin(pin, session),
-    onRepeatApproved: () async {
-      final result = await controller.repeatStudentAttempt(session);
-      if (!mounted) return;
-      if (!result.started) return;
-      _current = await controller.loadCurrentAttempt();
-      _push(_examScreen());
-    },
-  );
+  Widget _repeatScreen(ExamSession session, int previousViolationCount) =>
+      RepeatSessionScreen(
+        session: session,
+        previousViolationCount: previousViolationCount,
+        verifySupervisorPin: (pin) =>
+            controller.verifyRepeatSupervisorPin(pin, session),
+        onAuthorizationCancelled: controller.cancelSupervisorAuthorization,
+        onRepeatApproved: () async {
+          final result = await controller.repeatStudentAttempt(session);
+          if (!mounted) return;
+          if (!result.started) return;
+          _setCurrent(await controller.loadCurrentAttempt());
+          _push(_attemptShell());
+        },
+      );
 
   ExamSession _fallbackSession() => ExamSession(
     schemaVersion: 2,
@@ -551,23 +560,25 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
     );
   }
 
-  Widget _attemptShell() {
-    final state = _current!.state;
-    if (state == AttemptState.recoveryPending) return _recoveryScreen();
-    if (state == AttemptState.locked) {
-      // FR06: konten soal disembunyikan dan tidak dapat diinteraksikan,
-      // tetapi WebView dipertahankan — mengunci tidak me-reload Form.
-      // LockedScreen menutupi penuh di atas ExamScreen yang di-Offstage.
+  Widget _attemptShell() => ValueListenableBuilder<StoredAttempt?>(
+    valueListenable: _attemptView,
+    builder: (context, current, child) {
+      final state = current?.state;
+      if (current == null) return _homeScreen();
+      if (state == AttemptState.recoveryPending) return _recoveryScreen();
       return Stack(
         textDirection: TextDirection.ltr,
         children: [
-          Offstage(child: _examScreen()),
-          Positioned.fill(child: _lockedScreen()),
+          Offstage(
+            offstage: state == AttemptState.locked,
+            child: _examScreen(),
+          ),
+          if (state == AttemptState.locked)
+            Positioned.fill(child: _lockedScreen()),
         ],
       );
-    }
-    return _examScreen();
-  }
+    },
+  );
 
   static final ThemeData _theme = ThemeData(
     scaffoldBackgroundColor: Colors.white,

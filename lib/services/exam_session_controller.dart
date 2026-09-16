@@ -98,6 +98,7 @@ class ExamSessionController {
   bool _startingStudentAttempt = false;
   String? _endAuthorizationAttemptId;
   String? _verifiedPinAttemptId;
+  String? _repeatAuthorizationSessionId;
 
   ExamProtectionBridge? get protection => _protection;
 
@@ -448,6 +449,14 @@ class ExamSessionController {
     );
   }
 
+  Future<StoredAttempt?> loadLastEndedAttemptFor(ExamSession session) async {
+    final attempts = await _store.loadAttemptsFor(session.sessionId);
+    for (final attempt in attempts.reversed) {
+      if (attempt.state == AttemptState.ended) return attempt;
+    }
+    return null;
+  }
+
   Future<String?> _lastSessionIdWithEnded() async {
     final sessions = await _store.listSessions();
     for (final session in sessions) {
@@ -520,9 +529,21 @@ class ExamSessionController {
   /// Cooldown lima kegagalan/30 detik persisten di store.
   Future<bool> verifySupervisorPin(String pin, ExamSession session) async {
     final current = await _store.loadCurrentAttempt();
-    final scopeId = current?.attemptId ?? session.sessionId;
-    final verified = await _verifyPinInScope(pin, session, scopeId);
-    if (verified && current != null) _verifiedPinAttemptId = current.attemptId;
+    final storedSession = current?.session;
+    if (current != null &&
+        (storedSession == null ||
+            storedSession.sessionId != session.sessionId)) {
+      return false;
+    }
+    _verifiedPinAttemptId = null;
+    final verified = await _verifyPinInScope(
+      pin,
+      storedSession ?? session,
+      session.sessionId,
+    );
+    if (verified && current != null) {
+      _verifiedPinAttemptId = current.attemptId;
+    }
     return verified;
   }
 
@@ -536,7 +557,7 @@ class ExamSessionController {
         current.sessionId != session.sessionId) {
       return false;
     }
-    if (!await _verifyPinInScope(pin, storedSession, current.attemptId)) {
+    if (!await _verifyPinInScope(pin, storedSession, current.sessionId)) {
       return false;
     }
     _endAuthorizationAttemptId = current.attemptId;
@@ -556,6 +577,11 @@ class ExamSessionController {
   }
 
   void cancelEndAuthorization() => _endAuthorizationAttemptId = null;
+
+  void cancelSupervisorAuthorization() {
+    _verifiedPinAttemptId = null;
+    _repeatAuthorizationSessionId = null;
+  }
 
   Future<bool> _verifyPinInScope(
     String pin,
@@ -605,21 +631,10 @@ class ExamSessionController {
     if (session == null) {
       return const AuthorizationResult(authorized: false);
     }
-    final status = await _store.loadPinAttemptStatus(current.attemptId);
-    final state = PinAttemptState(
-      failedAttempts: status.failedAttempts,
-      lockedUntil: status.lockedUntil,
-    );
-    if (state.isLocked(now: _now())) {
-      return const AuthorizationResult(authorized: false, cooldownActive: true);
-    }
-    final ok = await _verifyPinInScope(pin, session, current.attemptId);
-    if (!ok) {
+    if (!await verifySupervisorPin(pin, session)) {
       return const AuthorizationResult(authorized: false, wrongPin: true);
     }
-    return AuthorizationResult(
-      authorized: await _continueWithProtection(current),
-    );
+    return AuthorizationResult(authorized: await confirmContinueAfterPin());
   }
 
   /// Selesaikan aksi Lanjutkan SETELAH layar PIN mengotorisasi: state
@@ -627,14 +642,25 @@ class ExamSessionController {
   /// [supervisorContinue] karena layar PIN sudah memverifikasi PIN.
   Future<bool> confirmContinueAfterPin() async {
     final current = await _store.loadCurrentAttempt();
-    if (current == null) return false;
+    if (current == null ||
+        _verifiedPinAttemptId != current.attemptId ||
+        (current.state != AttemptState.locked &&
+            current.state != AttemptState.recoveryPending)) {
+      return false;
+    }
+    _verifiedPinAttemptId = null;
     return _continueWithProtection(current);
   }
 
   Future<bool> _continueWithProtection(StoredAttempt current) async {
     final session = current.session;
     final protection = _protection;
-    if (session == null || protection == null) return false;
+    if (session == null ||
+        protection == null ||
+        (current.state != AttemptState.locked &&
+            current.state != AttemptState.recoveryPending)) {
+      return false;
+    }
 
     var prepared = false;
     try {
@@ -727,7 +753,7 @@ class ExamSessionController {
         settingsRestored: false,
       );
     }
-    final ok = await _verifyPinInScope(pin, session, current.attemptId);
+    final ok = await _verifyPinInScope(pin, session, current.sessionId);
     if (!ok) {
       return (
         authorization: const AuthorizationResult(
@@ -762,56 +788,73 @@ class ExamSessionController {
     );
   }
 
-  /// Pengawas mengizinkan attempt baru setelah attempt berakhir.
-  /// Otorisasi PIN lalu membuat attempt baru dengan counter nol.
+  /// PIN pengulangan hanya sah untuk sesi berakhir yang sama dan hanya
+  /// berlaku sampai satu attempt baru diminta.
+  Future<bool> verifyRepeatSupervisorPin(
+    String pin,
+    ExamSession session,
+  ) async {
+    _repeatAuthorizationSessionId = null;
+    if (await _store.loadCurrentAttempt() != null) return false;
+    final previous = await loadLastEndedAttemptFor(session);
+    final storedSession = previous?.session;
+    if (previous == null ||
+        storedSession == null ||
+        storedSession.sessionId != session.sessionId) {
+      return false;
+    }
+    if (!await _verifyPinInScope(pin, storedSession, session.sessionId)) {
+      return false;
+    }
+    _repeatAuthorizationSessionId = session.sessionId;
+    return true;
+  }
+
+  /// Versi langsung untuk pemanggil non-UI: PIN tetap dikonsumsi satu kali
+  /// dan attempt baru selalu melewati kesiapan/proteksi.
   Future<AuthorizationResult> supervisorRepeat(String pin) async {
     final endedSessionId = await _lastSessionIdWithEnded();
     if (endedSessionId == null) {
       return const AuthorizationResult(authorized: false);
     }
     final session = await _store.loadSession(endedSessionId);
-    if (session == null) {
-      return const AuthorizationResult(authorized: false);
-    }
-    final history = await _store.loadAttemptsFor(endedSessionId);
-    if (history.isEmpty) {
-      return const AuthorizationResult(authorized: false);
-    }
-    final lastEnded = history.lastWhere(
-      (a) => a.state == AttemptState.ended,
-      orElse: () => history.last,
-    );
-
-    final ok = await _verifyPinInScope(pin, session, lastEnded.attemptId);
-    if (!ok) {
+    if (session == null || !await verifyRepeatSupervisorPin(pin, session)) {
       return const AuthorizationResult(authorized: false, wrongPin: true);
     }
-    await _store.recordSupervisorAction(
-      attemptId: lastEnded.attemptId,
-      actionType: 'repeat',
-      result: 'new_attempt',
+    return AuthorizationResult(
+      authorized: (await repeatStudentAttempt(session)).started,
     );
-
-    // Attempt baru counter nol (PRD FR07); riwayat lama tetap.
-    final attemptId = await _store.startAttempt(
-      session,
-      attemptNumber: history.length + 1,
-    );
-    await _store.saveProtectionState(
-      attemptId: attemptId,
-      secureWindowActive: true,
-      notificationProtectionActive: true,
-      notificationAccessGranted: _protection?.notificationControlReady ?? false,
-      restorePending: true,
-      restoreData: const {'owned': 'examseal'},
-    );
-    return const AuthorizationResult(authorized: true);
   }
 
-  /// Buat attempt baru setelah otorisasi pengulangan (dipanggil UI setelah
-  /// supervisorRepeat sukses dan user mengonfirmasi).
-  Future<StartAttemptResult> repeatStudentAttempt(ExamSession session) =>
-      startStudentAttempt(session);
+  /// Buat attempt baru setelah PIN sesi berakhir terverifikasi. Kesiapan dan
+  /// proteksi selalu diperiksa ulang oleh [startStudentAttempt].
+  Future<StartAttemptResult> repeatStudentAttempt(ExamSession session) async {
+    final authorized = _repeatAuthorizationSessionId == session.sessionId;
+    _repeatAuthorizationSessionId = null;
+    if (!authorized) {
+      return const StartAttemptResult(
+        started: false,
+        reason: 'PIN pengawas diperlukan untuk mengulang sesi ini.',
+      );
+    }
+    final previous = await loadLastEndedAttemptFor(session);
+    if (previous == null || await _store.loadCurrentAttempt() != null) {
+      return const StartAttemptResult(
+        started: false,
+        reason:
+            'Status sesi berubah. Scan ulang untuk memeriksa status terbaru.',
+      );
+    }
+    final result = await startStudentAttempt(session);
+    if (result.started) {
+      await _store.recordSupervisorAction(
+        attemptId: previous.attemptId,
+        actionType: 'repeat',
+        result: 'new_attempt',
+      );
+    }
+    return result;
+  }
 
   // ---- Pemulihan & retensi ----
 

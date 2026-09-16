@@ -14,6 +14,7 @@ void main() {
 
     bool? approved;
     var repeated = 0;
+    var authorizationCancelled = false;
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -38,6 +39,9 @@ void main() {
                         previousViolationCount: 2,
                         verifySupervisorPin: (pin) => pin == '01234',
                         onRepeatApproved: () async => repeated++,
+                        onAuthorizationCancelled: () {
+                          authorizationCancelled = true;
+                        },
                       ),
                     ),
                   );
@@ -72,6 +76,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Sesi ini sudah diakhiri'), findsOneWidget);
     expect(approved, isNull);
+    expect(authorizationCancelled, isTrue);
 
     await tester.tap(find.text('PIN Pengawas').hitTestable());
     await tester.pumpAndSettle();

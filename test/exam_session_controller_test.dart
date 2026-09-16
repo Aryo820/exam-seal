@@ -312,6 +312,141 @@ void main() {
     );
   });
 
+  test(
+    'lanjut mengonsumsi satu otorisasi PIN pada attempt yang sama',
+    () async {
+      final controller = await newController();
+      final created = await controller.createTeacherSession(
+        examName: 'Matematika Kelas XI',
+        formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+      );
+      controller.attachProtectionStub(
+        screenProtectionReady: true,
+        notificationControlReady: true,
+      );
+      await controller.startStudentAttempt(created.session);
+      for (var count = 0; count < 3; count++) {
+        await controller.registerViolation('appLeftWhileActive');
+      }
+
+      expect(await controller.confirmContinueAfterPin(), isFalse);
+      expect(
+        await controller.verifySupervisorPin(created.pin, created.session),
+        isTrue,
+      );
+      expect(await controller.confirmContinueAfterPin(), isTrue);
+      final resumed = await controller.loadCurrentAttempt();
+      expect(resumed!.state, AttemptState.active);
+      expect(resumed.violationCount, 3);
+      expect(await controller.confirmContinueAfterPin(), isFalse);
+    },
+  );
+
+  test(
+    'pengulangan membutuhkan PIN sesi berakhir sebelum attempt baru',
+    () async {
+      final controller = await newController();
+      final created = await controller.createTeacherSession(
+        examName: 'Matematika Kelas XI',
+        formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+      );
+      controller.attachProtectionStub(
+        screenProtectionReady: true,
+        notificationControlReady: true,
+      );
+      expect(
+        (await controller.startStudentAttempt(created.session)).started,
+        isTrue,
+      );
+      await controller.supervisorEnd(
+        created.pin,
+        reason: 'Pengawas mengakhiri sesi.',
+      );
+
+      expect(
+        (await controller.repeatStudentAttempt(created.session)).started,
+        isFalse,
+      );
+      expect(
+        await controller.verifyRepeatSupervisorPin(
+          created.pin,
+          created.session,
+        ),
+        isTrue,
+      );
+      expect(
+        (await controller.repeatStudentAttempt(created.session)).started,
+        isTrue,
+      );
+      final repeated = await controller.loadCurrentAttempt();
+      expect(repeated!.attemptNumber, 2);
+      expect(repeated.violationCount, 0);
+      expect((await controller.loadLastEndedAttempt())!.attemptNumber, 1);
+    },
+  );
+
+  test('PIN sesi lain tidak dapat melanjutkan attempt terkunci', () async {
+    final controller = await newController();
+    final first = await controller.createTeacherSession(
+      examName: 'Matematika Kelas XI',
+      formUrl: Uri.parse('https://docs.google.com/forms/d/e/first/viewform'),
+    );
+    final second = await controller.createTeacherSession(
+      examName: 'Fisika Kelas XI',
+      formUrl: Uri.parse('https://docs.google.com/forms/d/e/second/viewform'),
+    );
+    controller.attachProtectionStub(
+      screenProtectionReady: true,
+      notificationControlReady: true,
+    );
+    await controller.startStudentAttempt(first.session);
+    for (var count = 0; count < 3; count++) {
+      await controller.registerViolation('appLeftWhileActive');
+    }
+
+    expect(
+      await controller.verifySupervisorPin(second.pin, second.session),
+      isFalse,
+    );
+    expect(await controller.confirmContinueAfterPin(), isFalse);
+    expect((await controller.loadCurrentAttempt())!.state, AttemptState.locked);
+  });
+
+  test('pengulangan memeriksa kesiapan kembali sebelum attempt baru', () async {
+    final controller = await newController();
+    final created = await controller.createTeacherSession(
+      examName: 'Matematika Kelas XI',
+      formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+    );
+    controller.attachProtectionStub(
+      screenProtectionReady: true,
+      notificationControlReady: true,
+    );
+    expect(
+      (await controller.startStudentAttempt(created.session)).started,
+      isTrue,
+    );
+    await controller.supervisorEnd(
+      created.pin,
+      reason: 'Pengawas mengakhiri sesi.',
+    );
+    controller.attachProtectionStub(
+      screenProtectionReady: false,
+      notificationControlReady: false,
+    );
+
+    expect(
+      await controller.verifyRepeatSupervisorPin(created.pin, created.session),
+      isTrue,
+    );
+    expect(
+      (await controller.repeatStudentAttempt(created.session)).started,
+      isFalse,
+    );
+    expect(await controller.loadCurrentAttempt(), isNull);
+    expect((await controller.loadLastEndedAttempt())!.attemptNumber, 1);
+  });
+
   test('PIN cooldown persists across controller restarts', () async {
     final db = await factory.openDatabase(inMemoryDatabasePath);
     openDbs.add(db);

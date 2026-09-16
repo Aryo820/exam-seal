@@ -12,6 +12,7 @@ class RepeatSessionScreen extends StatefulWidget {
     required this.previousViolationCount,
     required this.verifySupervisorPin,
     required this.onRepeatApproved,
+    this.onAuthorizationCancelled,
     super.key,
   }) : assert(previousViolationCount >= 0);
 
@@ -22,6 +23,7 @@ class RepeatSessionScreen extends StatefulWidget {
   /// Dipanggil setelah PIN benar dan pengawas mengonfirmasi attempt baru;
   /// composition root memulai attempt (readiness dicek ulang).
   final Future<void> Function() onRepeatApproved;
+  final VoidCallback? onAuthorizationCancelled;
 
   @override
   State<RepeatSessionScreen> createState() => _RepeatSessionScreenState();
@@ -72,7 +74,11 @@ class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
         ],
       ),
     );
-    if (confirmed == true && mounted) {
+    if (confirmed != true) {
+      widget.onAuthorizationCancelled?.call();
+      return;
+    }
+    if (mounted) {
       Navigator.of(context).pop(true);
       await widget.onRepeatApproved();
     }
