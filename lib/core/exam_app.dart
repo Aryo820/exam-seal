@@ -300,7 +300,19 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
 
   Future<void> _openSessionQr(ExamSession session) async {
     try {
-      if (!await controller.isFormConfirmed(session)) {
+      final formConfirmed = await controller.isFormConfirmed(session);
+      if (!formConfirmed && _current != null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Form belum siap. Mode Guru hanya dapat melihat sesi selama ujian berlangsung.',
+            ),
+          ),
+        );
+        return;
+      }
+      if (!formConfirmed) {
         if (!mounted) return;
         var inspected = false;
         final confirmed = await _navigatorKey.currentState?.push<bool>(

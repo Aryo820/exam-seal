@@ -200,41 +200,68 @@ class SessionStore {
     )).isNotEmpty,
   );
 
+  Future<void> _requireNoCurrentAttempt(DatabaseExecutor executor) async {
+    final current = await executor.query(
+      'attempts',
+      where: 'state IN (?, ?, ?)',
+      whereArgs: [
+        AttemptState.active.name,
+        AttemptState.locked.name,
+        AttemptState.recoveryPending.name,
+      ],
+      limit: 1,
+    );
+    if (current.isNotEmpty) {
+      throw StorageFailure(
+        'Perubahan kesiapan Form ditahan selama percobaan siswa berlangsung.',
+      );
+    }
+  }
+
   Future<void> beginFormTest(ExamSession session, DateTime now) =>
       _guard('memulai pemeriksaan Form', () async {
-        await _db.insert('form_checks', {
-          'session_id': session.sessionId,
-          'form_url': session.formUrl.toString(),
-          'started_at': now.millisecondsSinceEpoch,
-          'checked_at': null,
-          'blocked_navigations': 0,
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
+        await _db.transaction((txn) async {
+          await _requireNoCurrentAttempt(txn);
+          await txn.insert('form_checks', {
+            'session_id': session.sessionId,
+            'form_url': session.formUrl.toString(),
+            'started_at': now.millisecondsSinceEpoch,
+            'checked_at': null,
+            'blocked_navigations': 0,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        });
       });
 
   Future<void> recordFormNavigationBlocked(ExamSession session) =>
       _guard('mencatat navigasi Form yang diblokir', () async {
-        final changed = await _db.rawUpdate(
-          '''
+        await _db.transaction((txn) async {
+          await _requireNoCurrentAttempt(txn);
+          final changed = await txn.rawUpdate(
+            '''
         UPDATE form_checks SET blocked_navigations = blocked_navigations + 1
         WHERE session_id = ? AND form_url = ? AND checked_at IS NULL
       ''',
-          [session.sessionId, session.formUrl.toString()],
-        );
-        if (changed != 1) throw StorageFailure('Uji Form belum dimulai.');
+            [session.sessionId, session.formUrl.toString()],
+          );
+          if (changed != 1) throw StorageFailure('Uji Form belum dimulai.');
+        });
       });
 
   // Ini pernyataan manual guru, bukan bukti pengiriman dari Google Forms.
   Future<void> confirmFormReady(ExamSession session, DateTime now) =>
       _guard('menyimpan konfirmasi guru', () async {
-        final changed = await _db.update(
-          'form_checks',
-          {'checked_at': now.millisecondsSinceEpoch},
-          where: 'session_id = ? AND form_url = ? AND checked_at IS NULL',
-          whereArgs: [session.sessionId, session.formUrl.toString()],
-        );
-        if (changed != 1) {
-          throw StorageFailure('Jalankan uji Form terlebih dahulu.');
-        }
+        await _db.transaction((txn) async {
+          await _requireNoCurrentAttempt(txn);
+          final changed = await txn.update(
+            'form_checks',
+            {'checked_at': now.millisecondsSinceEpoch},
+            where: 'session_id = ? AND form_url = ? AND checked_at IS NULL',
+            whereArgs: [session.sessionId, session.formUrl.toString()],
+          );
+          if (changed != 1) {
+            throw StorageFailure('Jalankan uji Form terlebih dahulu.');
+          }
+        });
       });
 
   /// Simpan sesi (idempoten untuk sesi identik).

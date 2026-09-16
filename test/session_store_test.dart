@@ -50,6 +50,17 @@ void main() {
     expect(restored.violationCount, 0);
   });
 
+  test('mutasi Form ditolak atomik saat attempt sudah dimulai', () async {
+    final store = await newStore();
+    await store.saveSession(session);
+    await store.startAttempt(session, attemptNumber: 1);
+
+    await expectLater(
+      store.beginFormTest(session, DateTime.now()),
+      throwsA(isA<StorageFailure>()),
+    );
+  });
+
   test(
     'scan serentak dengan ID sama tidak menerima konfigurasi yang berbeda',
     () async {
