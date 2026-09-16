@@ -1,6 +1,21 @@
 # examseal
 
-A new Flutter project.
+ExamSeal menyimpan sesi, PIN verifier, state pengamanan, dan riwayat attempt
+secara lokal di perangkat Android.
+
+## Retensi dan batas data lokal
+
+- Attempt berakhir dihapus otomatis setelah lebih dari tujuh hari sejak waktu
+  berakhir. Attempt aktif, terkunci, menunggu pemulihan, dan penanda pemulihan
+  proteksi tetap dipertahankan.
+- Retensi hanya menghapus data pengamanan ExamSeal. Data WebView tidak dibersihkan
+  olehnya dan hanya boleh ditangani setelah pengawas memeriksa pengiriman Google
+  Forms; status lokal berakhir bukan bukti pengiriman.
+- Backup cloud dan transfer perangkat Android dikecualikan untuk seluruh data
+  aplikasi. Hapus data, instal ulang, atau pindah perangkat menghapus batas
+  pengulangan lokal; aplikasi tidak menjamin dapat mengenali attempt lama pada
+  instalasi atau perangkat lain. Untuk pelaksanaan berikutnya, guru membuat sesi
+  baru.
 
 ## Getting Started
 

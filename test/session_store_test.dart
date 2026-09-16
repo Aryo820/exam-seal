@@ -159,6 +159,159 @@ void main() {
   });
 
   test(
+    'retention menjaga batas tujuh hari, state penahan, dan sesi bersama',
+    () async {
+      final store = await newStore();
+      final now = DateTime.utc(2026, 9, 16, 12);
+      await store.saveSession(session);
+
+      final exactBoundary = await store.startAttempt(session, attemptNumber: 1);
+      await store.setAttemptState(
+        exactBoundary,
+        AttemptState.ended,
+        violationCount: 0,
+      );
+      await store.setAttemptEndedAt(
+        exactBoundary,
+        now.subtract(const Duration(days: 7)),
+      );
+
+      final expired = await store.startAttempt(session, attemptNumber: 2);
+      await store.setAttemptState(
+        expired,
+        AttemptState.ended,
+        violationCount: 0,
+      );
+      await store.setAttemptEndedAt(
+        expired,
+        now.subtract(const Duration(days: 7, milliseconds: 1)),
+      );
+
+      final held = <String>[];
+      for (final state in [
+        AttemptState.active,
+        AttemptState.locked,
+        AttemptState.recoveryPending,
+      ]) {
+        final attempt = await store.startAttempt(
+          session,
+          attemptNumber: 3 + state.index,
+        );
+        held.add(attempt);
+        await store.setAttemptState(attempt, state, violationCount: 0);
+        await store.setAttemptEndedAt(
+          attempt,
+          now.subtract(const Duration(days: 10)),
+        );
+      }
+
+      final unusedSession = ExamSession(
+        schemaVersion: 2,
+        sessionId: 'session-unused',
+        sessionCode: 'UNUSED-1',
+        examName: 'Sesi Guru Belum Dipakai',
+        formUrl: Uri.parse('https://docs.google.com/forms/d/e/unused/viewform'),
+        pinSalt: 'c2FsdA==',
+        pinVerifier: 'dmVyaWZpZXI=',
+        createdAt: now,
+      );
+      await store.saveSession(unusedSession);
+
+      expect(await store.runRetention(now: now), [expired]);
+      expect(
+        (await store.loadAttemptsFor(
+          session.sessionId,
+        )).map((attempt) => attempt.attemptId),
+        containsAll([exactBoundary, ...held]),
+      );
+      expect(await store.loadAttempt(expired), isNull);
+      expect(
+        (await store.loadSession(session.sessionId))!.pinVerifier,
+        session.pinVerifier,
+      );
+      expect(await store.loadSession(unusedSession.sessionId), isNotNull);
+    },
+  );
+
+  test(
+    'retention tidak menghapus data parsial saat penghapusan gagal',
+    () async {
+      final store = await newStore();
+      final now = DateTime.utc(2026, 9, 16, 12);
+      await store.saveSession(session);
+      final attemptId = await store.startAttempt(session, attemptNumber: 1);
+      await store.setAttemptState(
+        attemptId,
+        AttemptState.ended,
+        violationCount: 0,
+      );
+      await store.setAttemptEndedAt(
+        attemptId,
+        now.subtract(const Duration(days: 8)),
+      );
+      await store.recordEvent(
+        attemptId: attemptId,
+        eventType: 'networkLost',
+        countedAsViolation: false,
+        counterAfter: 0,
+      );
+      await store.recordSupervisorAction(
+        attemptId: attemptId,
+        actionType: 'end',
+        result: 'ended',
+      );
+      final db = openDbs.single;
+      await db.execute('''
+      CREATE TRIGGER fail_retention_attempt
+      BEFORE DELETE ON attempts
+      WHEN OLD.attempt_id = '$attemptId'
+      BEGIN SELECT RAISE(ABORT, 'simulasi pembersihan gagal'); END
+    ''');
+
+      await expectLater(
+        store.runRetention(now: now),
+        throwsA(isA<StorageFailure>()),
+      );
+
+      final retained = await store.loadAttempt(attemptId);
+      expect(retained, isNotNull);
+      expect(retained!.events, hasLength(1));
+      expect(
+        await db.query(
+          'supervisor_actions',
+          where: 'attempt_id = ?',
+          whereArgs: [attemptId],
+        ),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
+    'retention menjaga sesi selama pemulihan pra-aktivasi tertunda',
+    () async {
+      final store = await newStore();
+      final now = DateTime.utc(2026, 9, 16, 12);
+      await store.saveSession(session);
+      final attemptId = await store.startAttempt(session, attemptNumber: 1);
+      await store.setAttemptState(
+        attemptId,
+        AttemptState.ended,
+        violationCount: 0,
+      );
+      await store.setAttemptEndedAt(
+        attemptId,
+        now.subtract(const Duration(days: 8)),
+      );
+      await store.prepareProtectionActivation(session);
+
+      expect(await store.runRetention(now: now), [attemptId]);
+      expect(await store.loadSession(session.sessionId), isNotNull);
+      expect(await store.loadPreparedProtectionSessionId(), session.sessionId);
+    },
+  );
+
+  test(
     'retention keeps an ended attempt with pending protection restore',
     () async {
       final store = await newStore();

@@ -812,73 +812,85 @@ class SessionStore {
   /// Pembersihan retensi: hapus HANYA attempt berakhir yang berumur lebih
   /// dari tujuh hari sejak berakhir, beserta event dan aksi pengawasnya.
   /// Attempt aktif/terkunci/recoveryPending atau pemulihan OS tertunda tidak
-  /// pernah dihapus.
+  /// pernah dihapus. Pembersihan data WebView tidak pernah dipanggil di sini;
+  /// itu tetap tindakan terpisah setelah pengawas memeriksa pengiriman Form.
   /// Mengembalikan daftar attemptId yang dihapus.
   Future<List<String>> runRetention({
     required DateTime now,
   }) => _guard('menjalankan retensi', () async {
-    final cutoff = now.subtract(const Duration(days: 7)).millisecondsSinceEpoch;
-    final expired = await _db.query(
-      'attempts',
-      columns: ['attempt_id', 'session_id'],
-      where: '''
+    return _db.transaction((txn) async {
+      final cutoff = now
+          .subtract(const Duration(days: 7))
+          .millisecondsSinceEpoch;
+      final expired = await txn.query(
+        'attempts',
+        columns: ['attempt_id', 'session_id'],
+        where: '''
         state = ? AND ended_at IS NOT NULL AND ended_at < ?
         AND attempt_id NOT IN (
           SELECT attempt_id FROM protection_states WHERE restore_pending = 1
         )
       ''',
-      whereArgs: [AttemptState.ended.name, cutoff],
-    );
-    final ids = expired.map((row) => row['attempt_id'] as String).toList();
-    for (final id in ids) {
-      await _db.delete(
-        'session_events',
-        where: 'attempt_id = ?',
-        whereArgs: [id],
+        whereArgs: [AttemptState.ended.name, cutoff],
       );
-      await _db.delete(
-        'supervisor_actions',
-        where: 'attempt_id = ?',
-        whereArgs: [id],
-      );
-      await _db.delete(
-        'protection_states',
-        where: 'attempt_id = ?',
-        whereArgs: [id],
-      );
-      await _db.delete(
-        'pin_attempt_status',
-        where: 'attempt_id = ?',
-        whereArgs: [id],
-      );
-      await _db.delete('attempts', where: 'attempt_id = ?', whereArgs: [id]);
-    }
-    // Hanya sesi dengan attempt kedaluwarsa yang menjadi kandidat.
-    // Sesi guru yang belum dipakai harus tetap tersedia setelah boot.
-    final expiredSessions = expired
-        .map((row) => row['session_id'] as String)
-        .toSet();
-    for (final sessionId in expiredSessions) {
-      final remaining = await _db.query(
-        'attempts',
-        columns: ['attempt_id'],
-        where: 'session_id = ?',
-        whereArgs: [sessionId],
-        limit: 1,
-      );
-      if (remaining.isEmpty) {
-        await _db.delete(
-          'form_checks',
-          where: 'session_id = ?',
-          whereArgs: [sessionId],
+      final ids = expired.map((row) => row['attempt_id'] as String).toList();
+      for (final id in ids) {
+        await txn.delete(
+          'session_events',
+          where: 'attempt_id = ?',
+          whereArgs: [id],
         );
-        await _db.delete(
-          'sessions',
-          where: 'session_id = ?',
-          whereArgs: [sessionId],
+        await txn.delete(
+          'supervisor_actions',
+          where: 'attempt_id = ?',
+          whereArgs: [id],
         );
+        await txn.delete(
+          'protection_states',
+          where: 'attempt_id = ?',
+          whereArgs: [id],
+        );
+        await txn.delete(
+          'pin_attempt_status',
+          where: 'attempt_id = ?',
+          whereArgs: [id],
+        );
+        await txn.delete('attempts', where: 'attempt_id = ?', whereArgs: [id]);
       }
-    }
-    return ids;
+      // Hanya sesi dengan attempt kedaluwarsa yang menjadi kandidat.
+      // Sesi guru yang belum dipakai atau masih memulihkan proteksi tetap ada.
+      final expiredSessions = expired
+          .map((row) => row['session_id'] as String)
+          .toSet();
+      for (final sessionId in expiredSessions) {
+        final remaining = await txn.query(
+          'attempts',
+          columns: ['attempt_id'],
+          where: 'session_id = ?',
+          whereArgs: [sessionId],
+          limit: 1,
+        );
+        final restoring = await txn.query(
+          'prepared_protection_activations',
+          columns: ['session_id'],
+          where: 'session_id = ?',
+          whereArgs: [sessionId],
+          limit: 1,
+        );
+        if (remaining.isEmpty && restoring.isEmpty) {
+          await txn.delete(
+            'form_checks',
+            where: 'session_id = ?',
+            whereArgs: [sessionId],
+          );
+          await txn.delete(
+            'sessions',
+            where: 'session_id = ?',
+            whereArgs: [sessionId],
+          );
+        }
+      }
+      return ids;
+    });
   });
 }
