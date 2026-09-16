@@ -425,6 +425,16 @@ class SessionStore {
   /// membuat attempt baru.
   Future<StoredAttempt?> loadCurrentAttempt() =>
       _guard('memuat attempt tersimpan', () async {
+        final unknownStates = await _db.query(
+          'attempts',
+          columns: ['state'],
+          where: 'state NOT IN (?, ?, ?, ?, ?)',
+          whereArgs: AttemptState.values.map((state) => state.name).toList(),
+          limit: 1,
+        );
+        if (unknownStates.isNotEmpty) {
+          throw StorageFailure('State attempt tersimpan tidak dikenal.');
+        }
         final rows = await _db.query(
           'attempts',
           where: 'state IN (?, ?, ?)',
@@ -475,6 +485,11 @@ class SessionStore {
       orderBy: 'occurred_at ASC',
     );
     final session = await loadSession(row['session_id'] as String);
+    if (session == null) {
+      throw StorageFailure(
+        'Data sesi untuk attempt tersimpan tidak ditemukan.',
+      );
+    }
     final eventList = events.map(_eventFromRow).toList();
     final lastCounted = eventList.lastWhereOrNull((e) => e.countedAsViolation);
     return StoredAttempt(
@@ -493,10 +508,12 @@ class SessionStore {
     );
   }
 
-  AttemptState _stateFromName(String name) => AttemptState.values.firstWhere(
-    (s) => s.name == name,
-    orElse: () => AttemptState.preExam,
-  );
+  AttemptState _stateFromName(String name) {
+    for (final state in AttemptState.values) {
+      if (state.name == name) return state;
+    }
+    throw StorageFailure('State attempt tersimpan tidak dikenal.');
+  }
 
   Future<void> setAttemptState(
     String attemptId,

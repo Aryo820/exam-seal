@@ -76,7 +76,10 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
     try {
       await controller.runRetention();
     } on StorageFailure {
-      // Retensi gagal bukan alasan menahan siswa; boot tetap lanjut.
+      _blockBoot(
+        'Data retensi tidak dapat dibaca. Minta pengawas memeriksa penyimpanan sebelum ujian dilanjutkan.',
+      );
+      return;
     }
     var restored = false;
     try {
@@ -102,12 +105,23 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
         _setCurrent(current);
       }
     } on StorageFailure {
-      _setCurrent(null);
+      _blockBoot(
+        'Data percobaan tidak dapat dibaca. Minta pengawas memeriksa penyimpanan sebelum ujian dilanjutkan.',
+      );
+      return;
     }
     if (!mounted) return;
     setState(() {
       _booting = false;
       _bootRecoveryError = null;
+    });
+  }
+
+  void _blockBoot(String message) {
+    if (!mounted) return;
+    setState(() {
+      _booting = false;
+      _bootRecoveryError = message;
     });
   }
 

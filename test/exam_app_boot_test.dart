@@ -165,4 +165,43 @@ void main() {
     expect(find.byType(ProcessRecoveryScreen), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('state attempt rusak menahan beranda untuk penanganan pengawas', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = await databaseFactoryFfiNoIsolate.openDatabase(
+      inMemoryDatabasePath,
+    );
+    addTearDown(db.close);
+    final a = await seededController(db);
+    final created = (await tester.runAsync(
+      () => a.createTeacherSession(
+        examName: 'Matematika Kelas XI',
+        formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+      ),
+    ))!;
+    await a.startStudentAttempt(created.session);
+    final attempt = await a.loadCurrentAttempt();
+    await db.update(
+      'attempts',
+      {'state': 'tidak_dikenal'},
+      where: 'attempt_id = ?',
+      whereArgs: [attempt!.attemptId],
+    );
+
+    final b = await seededController(db);
+    await tester.pumpWidget(ExamApp(controller: b));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Data percobaan tidak dapat dibaca'),
+      findsOneWidget,
+    );
+    expect(find.text('Pilih mode'), findsNothing);
+  });
 }
