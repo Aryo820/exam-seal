@@ -14,6 +14,7 @@ abstract final class LocalAuthGate {
       return await _auth.authenticate(
         localizedReason:
             'Autentikasi perangkat diperlukan untuk melihat PIN pengawas.',
+        persistAcrossBackgrounding: true,
       );
     } catch (_) {
       return false;
