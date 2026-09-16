@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/exam_sessions.dart';
+import '../services/local_auth_gate.dart';
 
 /// Stitch T05 - Akses PIN setelah autentikasi kunci layar perangkat guru.
 class SupervisorPinAccessScreen extends StatefulWidget {
@@ -79,6 +80,13 @@ class _SupervisorPinAccessScreenState extends State<SupervisorPinAccessScreen>
         throw const FormatException('Invalid supervisor PIN');
       }
       if (mounted) setState(() => _pin = pin);
+    } on DeviceAuthenticationUnavailable {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Kunci layar HP belum siap. Atur PIN, pola, atau sandi layar di Setelan, lalu coba lagi.',
+        );
+      }
     } catch (_) {
       if (mounted) {
         setState(

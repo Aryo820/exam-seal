@@ -1,5 +1,6 @@
 import 'package:examseal/models/exam_sessions.dart';
 import 'package:examseal/screens/session_qr_screen.dart';
+import 'package:examseal/services/local_auth_gate.dart';
 import 'package:examseal/services/qr_codec.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -105,5 +106,36 @@ void main() {
     await tester.pump();
     expect(find.text('•••••'), findsOneWidget);
     expect(find.text('7 4 2 0 9'), findsNothing);
+  });
+
+  testWidgets('T05 menjelaskan kunci layar HP yang belum siap', (tester) async {
+    final session = ExamSession(
+      schemaVersion: 2,
+      sessionId: 's',
+      sessionCode: 'MTH-7K2P',
+      examName: 'Matematika Kelas XI',
+      formUrl: Uri.parse('https://docs.google.com/forms/d/e/example/viewform'),
+      pinSalt: 'AQEBAQEBAQEBAQEBAQEBAQ==',
+      pinVerifier: 'AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionQrScreen(
+          session: session,
+          authenticateSupervisor: () =>
+              throw const DeviceAuthenticationUnavailable(),
+          readSupervisorPin: () => '74209',
+        ),
+      ),
+    );
+
+    await tester.ensureVisible(find.text('Akses PIN Pengawas'));
+    await tester.tap(find.text('Akses PIN Pengawas'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Autentikasi Kunci Layar HP'));
+    await tester.tap(find.text('Autentikasi Kunci Layar HP'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Kunci layar HP belum siap'), findsOneWidget);
   });
 }

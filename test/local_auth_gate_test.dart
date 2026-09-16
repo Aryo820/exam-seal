@@ -17,6 +17,17 @@ void main() {
       expect(platform.options?.biometricOnly, isFalse);
     },
   );
+
+  test('menandai perangkat tanpa kunci layar sebagai tidak tersedia', () async {
+    final previous = LocalAuthPlatform.instance;
+    LocalAuthPlatform.instance = _UnavailableAuthPlatform();
+    addTearDown(() => LocalAuthPlatform.instance = previous);
+
+    await expectLater(
+      LocalAuthGate.authenticate(),
+      throwsA(isA<DeviceAuthenticationUnavailable>()),
+    );
+  });
 }
 
 class _BackgroundingAuthPlatform extends LocalAuthPlatform {
@@ -37,4 +48,12 @@ class _BackgroundingAuthPlatform extends LocalAuthPlatform {
     this.options = options;
     return options.stickyAuth;
   }
+}
+
+class _UnavailableAuthPlatform extends LocalAuthPlatform {
+  @override
+  Future<bool> deviceSupportsBiometrics() async => false;
+
+  @override
+  Future<bool> isDeviceSupported() async => false;
 }
