@@ -99,6 +99,8 @@ class ExamSessionController {
   String? _endAuthorizationAttemptId;
   String? _verifiedPinAttemptId;
   String? _repeatAuthorizationSessionId;
+  String? _teacherModeAuthorizationAttemptId;
+  int? _teacherModeAuthorizationEventCount;
 
   ExamProtectionBridge? get protection => _protection;
 
@@ -550,17 +552,39 @@ class ExamSessionController {
     return verified;
   }
 
-  /// Otorisasi langsung mode guru ketika attempt siswa masih aktif. Tidak
-  /// menghasilkan token yang dapat dipakai ulang oleh aksi lain.
+  /// Otorisasi mode guru pada attempt aktif. Token berikutnya terikat pada
+  /// snapshot attempt agar perubahan status membatalkan akses.
   Future<bool> authorizeTeacherMode(String pin, ExamSession session) async {
+    _teacherModeAuthorizationAttemptId = null;
+    _teacherModeAuthorizationEventCount = null;
     final current = await _store.loadCurrentAttempt();
     final storedSession = current?.session;
     if (current == null ||
         storedSession == null ||
-        storedSession.sessionId != session.sessionId) {
+        storedSession.sessionId != session.sessionId ||
+        current.state != AttemptState.active) {
       return false;
     }
-    return _verifyPinInScope(pin, storedSession, current.sessionId);
+    if (!await _verifyPinInScope(pin, storedSession, current.sessionId)) {
+      return false;
+    }
+    _teacherModeAuthorizationAttemptId = current.attemptId;
+    _teacherModeAuthorizationEventCount = current.events.length;
+    return true;
+  }
+
+  /// Konsumsi otorisasi mode guru aktif hanya jika snapshot attempt belum
+  /// berubah sejak PIN diverifikasi.
+  Future<bool> confirmTeacherModeAfterActivePin() async {
+    final current = await _store.loadCurrentAttempt();
+    final authorized =
+        current != null &&
+        _teacherModeAuthorizationAttemptId == current.attemptId &&
+        _teacherModeAuthorizationEventCount == current.events.length &&
+        current.state == AttemptState.active;
+    _teacherModeAuthorizationAttemptId = null;
+    _teacherModeAuthorizationEventCount = null;
+    return authorized;
   }
 
   /// Otorisasi khusus untuk mengakhiri attempt aktif. Hanya berlaku sekali
@@ -614,6 +638,8 @@ class ExamSessionController {
   void cancelSupervisorAuthorization() {
     _verifiedPinAttemptId = null;
     _repeatAuthorizationSessionId = null;
+    _teacherModeAuthorizationAttemptId = null;
+    _teacherModeAuthorizationEventCount = null;
   }
 
   Future<bool> _verifyPinInScope(

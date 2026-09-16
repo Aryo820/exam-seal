@@ -223,7 +223,9 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
           await controller.authorizeTeacherMode(pin, session);
     },
     onResumeStudentSession: _resumeStoredAttempt,
-    onOpenTeacherMode: () => unawaited(_openTeacherMode()),
+    onOpenTeacherMode: () => unawaited(
+      _current == null ? _openTeacherMode() : _openTeacherModeAfterActivePin(),
+    ),
     onOpenStudentScan: () => _navigatorKey.currentState?.push(
       MaterialPageRoute<void>(builder: (_) => _scanScreen()),
     ),
@@ -252,7 +254,18 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
         ),
       ),
     );
-    if (verified == true && mounted) await _openTeacherMode();
+    if (verified != true || !mounted) return;
+    if (!await controller.confirmTeacherModeAfterActivePin() || !mounted) {
+      return;
+    }
+    await _openTeacherMode();
+  }
+
+  Future<void> _openTeacherModeAfterActivePin() async {
+    if (!await controller.confirmTeacherModeAfterActivePin() || !mounted) {
+      return;
+    }
+    await _openTeacherMode();
   }
 
   Future<void> _openTeacherModeAfterVerifiedPin() async {
