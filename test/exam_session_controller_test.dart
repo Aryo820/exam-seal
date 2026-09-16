@@ -258,16 +258,31 @@ void main() {
       );
       await controller.startStudentAttempt(created.session);
 
-      expect(await controller.recordAmbiguousEvent('networkLost'), isTrue);
-      expect(await controller.recordAmbiguousEvent('webViewFailed'), isTrue);
-      expect(await controller.recordAmbiguousEvent('formUnavailable'), isTrue);
+      expect(
+        await controller.recordAmbiguousEvent(OperationalEvent.networkLost.type),
+        isTrue,
+      );
+      expect(
+        await controller.recordAmbiguousEvent(
+          OperationalEvent.webViewFailed.type,
+        ),
+        isTrue,
+      );
+      expect(
+        await controller.recordAmbiguousEvent(
+          OperationalEvent.formUnavailable.type,
+        ),
+        isTrue,
+      );
 
       final attempt = (await controller.loadCurrentAttempt())!;
       expect(attempt.state, AttemptState.active);
       expect(attempt.violationCount, 0);
       expect(
         attempt.events.map((event) => event.eventType),
-        containsAll(['networkLost', 'webViewFailed', 'formUnavailable']),
+        containsAll(
+          OperationalEvent.values.map((event) => event.type),
+        ),
       );
     },
   );

@@ -8,6 +8,16 @@ enum AttemptState { preExam, active, locked, recoveryPending, ended }
 /// Hasil pendaftaran pelanggaran: peringatan (counter 1-2) atau penguncian.
 enum ViolationOutcome { warned, locked }
 
+enum OperationalEvent {
+  networkLost('networkLost'),
+  webViewFailed('webViewFailed'),
+  formUnavailable('formUnavailable');
+
+  const OperationalEvent(this.type);
+
+  final String type;
+}
+
 /// Transisi attempt yang aman. Semua perubahan state melewati kelas ini
 /// agar invarian PRD terjaga di satu tempat:
 /// - attempt aktif tidak dapat diam-diam ditimpa scan baru;
@@ -46,11 +56,11 @@ class AttemptStateMachine {
   /// Event ambigu yang dicatat tetapi tidak pernah menambah counter:
   /// panggilan masuk, jaringan putus, dialog OS, kehilangan fokus saja,
   /// crash/reboot, dan peluncuran ulang (PRD FR05).
-  static const Set<String> ambiguousEventTypes = {
+  static final Set<String> ambiguousEventTypes = {
     'incomingCall',
-    'networkLost',
-    'webViewFailed',
-    'formUnavailable',
+    OperationalEvent.networkLost.type,
+    OperationalEvent.webViewFailed.type,
+    OperationalEvent.formUnavailable.type,
     'focusLost',
     'osDialog',
     'processDeath',

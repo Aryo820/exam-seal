@@ -168,8 +168,8 @@ class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
         widget.formContent ??
         RestrictedFormView(
           url: widget.session.formUrl,
-          onOperationalIssue: (type) =>
-              unawaited(widget.recordAmbiguousEvent(type)),
+          onOperationalIssue: (event) =>
+              unawaited(widget.recordAmbiguousEvent(event.type)),
         );
     return PopScope(
       canPop: false,

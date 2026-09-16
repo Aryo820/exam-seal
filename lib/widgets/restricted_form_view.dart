@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../services/attempt_state_machine.dart';
 import '../services/form_url_policy.dart';
 
 /// WebView bersama untuk uji guru dan ujian siswa; tidak membaca jawaban.
@@ -18,7 +19,7 @@ class RestrictedFormView extends StatefulWidget {
   final Uri url;
   final ValueChanged<bool>? onInspected;
   final VoidCallback? onBlocked;
-  final ValueChanged<String>? onOperationalIssue;
+  final ValueChanged<OperationalEvent>? onOperationalIssue;
   @override
   State<RestrictedFormView> createState() => _RestrictedFormViewState();
 }
@@ -57,7 +58,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
     widget.onBlocked?.call();
   }
 
-  void _reportOperationalIssue(String type) =>
+  void _reportOperationalIssue(OperationalEvent type) =>
       widget.onOperationalIssue?.call(type);
 
   void _networkInterrupted() {
@@ -104,7 +105,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
             }
             _blocked();
             if (uri?.host == 'accounts.google.com') {
-              _reportOperationalIssue('formUnavailable');
+              _reportOperationalIssue(OperationalEvent.formUnavailable);
               _fail('Form meminta login Google dan tidak sesuai pilot.');
             }
             return NavigationDecision.prevent;
@@ -134,7 +135,9 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
               'renderer process gone',
             );
             _reportOperationalIssue(
-              rendererLost ? 'webViewFailed' : 'networkLost',
+              rendererLost
+                  ? OperationalEvent.webViewFailed
+                  : OperationalEvent.networkLost,
             );
             if (rendererLost) {
               _fail(
@@ -146,7 +149,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
           },
           onHttpError: (error) {
             if (error.request?.uri.toString() != _currentUrl) return;
-            _reportOperationalIssue('formUnavailable');
+            _reportOperationalIssue(OperationalEvent.formUnavailable);
             _fail('Server Form mengembalikan kesalahan. Hubungi pengawas.');
           },
         ),
@@ -155,7 +158,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
       setState(() => _controller = controller);
       await controller.loadRequest(widget.url);
     } catch (_) {
-      _reportOperationalIssue('webViewFailed');
+      _reportOperationalIssue(OperationalEvent.webViewFailed);
       _fail(
         'WebView tidak tersedia atau gagal disiapkan. Coba lagi bersama pengawas.',
       );
@@ -186,7 +189,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
       if (!mounted || version != _pageVersion) return;
       if (result['upload'] == true ||
           (result['hasForm'] != true && !uri.path.endsWith('/formResponse'))) {
-        _reportOperationalIssue('formUnavailable');
+        _reportOperationalIssue(OperationalEvent.formUnavailable);
         _fail(
           'Form ditutup, meminta login, atau memerlukan fitur di luar pilot. Hubungi pengawas.',
         );
@@ -237,7 +240,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
     try {
       await _controller!.loadRequest(target);
     } catch (_) {
-      _reportOperationalIssue('networkLost');
+      _reportOperationalIssue(OperationalEvent.networkLost);
       _fail('Form gagal dimuat ulang. Hubungi pengawas.');
     }
   }

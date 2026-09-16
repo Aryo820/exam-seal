@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:examseal/models/exam_sessions.dart';
 import 'package:examseal/screens/form_test_run_screen.dart';
 import 'package:examseal/screens/supervisor_pin_screen.dart';
+import 'package:examseal/services/attempt_state_machine.dart';
 import 'package:examseal/widgets/restricted_form_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -224,7 +225,7 @@ void main() {
   testWidgets(
     'jaringan putus pada halaman aktif tercatat tanpa memuat ulang otomatis',
     (tester) async {
-      final events = <String>[];
+      final events = <OperationalEvent>[];
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -250,7 +251,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(events, ['networkLost']);
+      expect(events, [OperationalEvent.networkLost]);
       expect(find.text('Form native'), findsOneWidget);
       expect(find.textContaining('Koneksi terputus'), findsOneWidget);
       expect(platform.controller.loaded, [form]);
@@ -267,7 +268,7 @@ void main() {
   testWidgets(
     'gangguan saat pengiriman dicatat dan pemulihan tetap meminta pengawas',
     (tester) async {
-      final events = <String>[];
+      final events = <OperationalEvent>[];
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -299,7 +300,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(events, ['networkLost']);
+      expect(events, [OperationalEvent.networkLost]);
       expect(find.text('Form native'), findsNothing);
       expect(find.textContaining('Form gagal dimuat'), findsOneWidget);
       await tester.tap(find.text('Coba Lagi'));
@@ -311,7 +312,7 @@ void main() {
   testWidgets('Form meminta login ditahan dan tercatat sebagai gangguan', (
     tester,
   ) async {
-    final events = <String>[];
+    final events = <OperationalEvent>[];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -338,7 +339,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(events, ['formUnavailable']);
+    expect(events, [OperationalEvent.formUnavailable]);
     expect(find.textContaining('meminta login Google'), findsOneWidget);
     expect(find.text('Form native'), findsNothing);
   });
