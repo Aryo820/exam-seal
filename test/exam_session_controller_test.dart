@@ -504,6 +504,49 @@ void main() {
     expect((await controller.loadCurrentAttempt())!.state, AttemptState.locked);
   });
 
+  test('mode guru terotorisasi membaca sesi tanpa mengubah attempt', () async {
+    final controller = await newController();
+    final created = await controller.createTeacherSession(
+      examName: 'Matematika Kelas XI',
+      formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+    );
+    controller.attachProtectionStub(
+      screenProtectionReady: true,
+      notificationControlReady: true,
+    );
+    await controller.startStudentAttempt(created.session);
+
+    expect(
+      await controller.authorizeTeacherMode(created.pin, created.session),
+      isTrue,
+    );
+    expect(await controller.confirmTeacherModeAfterActivePin(), isTrue);
+    expect(await controller.listTeacherSessions(), hasLength(1));
+    expect((await controller.loadCurrentAttempt())!.state, AttemptState.active);
+
+    for (var count = 0; count < 3; count++) {
+      await controller.registerViolation('appLeftWhileActive');
+    }
+    await expectLater(
+      controller.listTeacherSessions(),
+      throwsA(isA<StorageFailure>()),
+    );
+
+    expect(
+      await controller.verifySupervisorPin(created.pin, created.session),
+      isTrue,
+    );
+    expect(await controller.authorizeTeacherModeAfterVerifiedPin(), isTrue);
+    expect(await controller.listTeacherSessions(), hasLength(1));
+    expect((await controller.loadCurrentAttempt())!.state, AttemptState.locked);
+
+    controller.closeTeacherMode();
+    await expectLater(
+      controller.listTeacherSessions(),
+      throwsA(isA<StorageFailure>()),
+    );
+  });
+
   test('pengulangan memeriksa kesiapan kembali sebelum attempt baru', () async {
     final controller = await newController();
     final created = await controller.createTeacherSession(

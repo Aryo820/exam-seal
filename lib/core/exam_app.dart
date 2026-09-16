@@ -232,15 +232,19 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
   );
 
   Future<void> _openTeacherMode() async {
-    await _navigatorKey.currentState?.push<void>(
-      MaterialPageRoute(
-        builder: (_) => TeacherSessionsScreen(
-          loadSessions: controller.listTeacherSessions,
-          onCreateSession: _openCreateSession,
-          onShowQr: _openSessionQr,
+    try {
+      await _navigatorKey.currentState?.push<void>(
+        MaterialPageRoute(
+          builder: (_) => TeacherSessionsScreen(
+            loadSessions: controller.listTeacherSessions,
+            onCreateSession: _openCreateSession,
+            onShowQr: _openSessionQr,
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      controller.closeTeacherMode();
+    }
   }
 
   Future<void> _openTeacherModeFromActive(ExamSession session) async {
