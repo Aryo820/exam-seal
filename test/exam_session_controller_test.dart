@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -6,6 +8,34 @@ import 'package:examseal/services/attempt_state_machine.dart';
 import 'package:examseal/services/exam_session_controller.dart';
 import 'package:examseal/services/session_store.dart';
 import 'package:examseal/services/teacher_session_secrets.dart';
+
+class _BlockingSecrets implements TeacherSessionSecrets {
+  final _pins = <String, String>{};
+  final hasPinStarted = Completer<void>();
+  final releaseHasPin = Completer<void>();
+  bool blockNextHasPin = false;
+
+  @override
+  Future<void> savePin(String sessionId, String pin) async {
+    _pins[sessionId] = pin;
+  }
+
+  @override
+  Future<String?> readPin(String sessionId) async => _pins[sessionId];
+
+  @override
+  Future<bool> hasPin(String sessionId) async {
+    if (blockNextHasPin) {
+      blockNextHasPin = false;
+      hasPinStarted.complete();
+      await releaseHasPin.future;
+    }
+    return _pins.containsKey(sessionId);
+  }
+
+  @override
+  Future<void> deletePin(String sessionId) async => _pins.remove(sessionId);
+}
 
 void main() {
   sqfliteFfiInit();
@@ -545,6 +575,41 @@ void main() {
       controller.listTeacherSessions(),
       throwsA(isA<StorageFailure>()),
     );
+  });
+
+  test('pembacaan sesi menolak snapshot mode guru yang berubah', () async {
+    final db = await factory.openDatabase(inMemoryDatabasePath);
+    openDbs.add(db);
+    final secrets = _BlockingSecrets();
+    final controller = ExamSessionController(
+      store: await SessionStore.open(db),
+      secrets: secrets,
+      now: () => DateTime.now(),
+    );
+    final created = await controller.createTeacherSession(
+      examName: 'Matematika Kelas XI',
+      formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+    );
+    controller.attachProtectionStub(
+      screenProtectionReady: true,
+      notificationControlReady: true,
+    );
+    await controller.startStudentAttempt(created.session);
+    expect(
+      await controller.authorizeTeacherMode(created.pin, created.session),
+      isTrue,
+    );
+    expect(await controller.confirmTeacherModeAfterActivePin(), isTrue);
+
+    secrets.blockNextHasPin = true;
+    final sessions = controller.listTeacherSessions();
+    await secrets.hasPinStarted.future;
+    for (var count = 0; count < 3; count++) {
+      await controller.registerViolation('appLeftWhileActive');
+    }
+    secrets.releaseHasPin.complete();
+
+    await expectLater(sessions, throwsA(isA<StorageFailure>()));
   });
 
   test('pengulangan memeriksa kesiapan kembali sebelum attempt baru', () async {
