@@ -136,7 +136,7 @@ class ExamSessionController {
     required String examName,
     required Uri formUrl,
   }) async {
-    await _requireTeacherModeAvailable();
+    await _requireTeacherMutationAvailable();
     final name = examName.trim();
     if (name.isEmpty ||
         name.length > 200 ||
@@ -160,7 +160,7 @@ class ExamSessionController {
     );
     try {
       await _secrets.savePin(session.sessionId, pin);
-      await _requireTeacherModeAvailable();
+      await _requireTeacherMutationAvailable();
       await _store.saveSession(session);
     } catch (_) {
       try {
@@ -187,6 +187,14 @@ class ExamSessionController {
     if (!authorized) {
       throw StorageFailure(
         'Otorisasi mode guru tidak tersedia atau status percobaan siswa berubah.',
+      );
+    }
+  }
+
+  Future<void> _requireTeacherMutationAvailable() async {
+    if (await _store.loadCurrentAttempt() != null) {
+      throw StorageFailure(
+        'Perubahan sesi dan kesiapan Form ditahan selama percobaan siswa berlangsung.',
       );
     }
   }
@@ -239,24 +247,24 @@ class ExamSessionController {
         return _store.isFormConfirmed(session);
       });
 
-  Future<void> beginFormTest(ExamSession session) =>
-      _withTeacherModeAccess(() async {
-        await _requireOwnedSession(session);
-        await _store.beginFormTest(session, _now());
-      });
+  Future<void> beginFormTest(ExamSession session) async {
+    await _requireTeacherMutationAvailable();
+    await _requireOwnedSession(session);
+    await _store.beginFormTest(session, _now());
+  }
 
-  Future<void> recordFormNavigationBlocked(ExamSession session) =>
-      _withTeacherModeAccess(() async {
-        await _requireOwnedSession(session);
-        await _store.recordFormNavigationBlocked(session);
-      });
+  Future<void> recordFormNavigationBlocked(ExamSession session) async {
+    await _requireTeacherMutationAvailable();
+    await _requireOwnedSession(session);
+    await _store.recordFormNavigationBlocked(session);
+  }
 
-  Future<bool> confirmFormReady(ExamSession session) =>
-      _withTeacherModeAccess(() async {
-        await _requireOwnedSession(session);
-        await _store.confirmFormReady(session, _now());
-        return true;
-      });
+  Future<bool> confirmFormReady(ExamSession session) async {
+    await _requireTeacherMutationAvailable();
+    await _requireOwnedSession(session);
+    await _store.confirmFormReady(session, _now());
+    return true;
+  }
 
   ({ExamSession? session, String? error}) scanPayload(String payload) =>
       decodeScan([payload]);

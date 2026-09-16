@@ -237,6 +237,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
         MaterialPageRoute(
           builder: (_) => TeacherSessionsScreen(
             loadSessions: controller.listTeacherSessions,
+            canCreateSession: _current == null,
             onCreateSession: _openCreateSession,
             onShowQr: _openSessionQr,
           ),

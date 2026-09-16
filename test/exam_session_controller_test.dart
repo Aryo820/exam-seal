@@ -612,6 +612,43 @@ void main() {
     await expectLater(sessions, throwsA(isA<StorageFailure>()));
   });
 
+  test(
+    'mode guru saat attempt aktif menahan perubahan sesi dan Form',
+    () async {
+      final controller = await newController();
+      final created = await controller.createTeacherSession(
+        examName: 'Matematika Kelas XI',
+        formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+      );
+      controller.attachProtectionStub(
+        screenProtectionReady: true,
+        notificationControlReady: true,
+      );
+      await controller.startStudentAttempt(created.session);
+      expect(
+        await controller.authorizeTeacherMode(created.pin, created.session),
+        isTrue,
+      );
+      expect(await controller.confirmTeacherModeAfterActivePin(), isTrue);
+
+      await expectLater(
+        controller.createTeacherSession(
+          examName: 'Fisika Kelas XI',
+          formUrl: Uri.parse('https://docs.google.com/forms/d/e/def/viewform'),
+        ),
+        throwsA(isA<StorageFailure>()),
+      );
+      await expectLater(
+        controller.beginFormTest(created.session),
+        throwsA(isA<StorageFailure>()),
+      );
+      expect(
+        (await controller.loadCurrentAttempt())!.state,
+        AttemptState.active,
+      );
+    },
+  );
+
   test('pengulangan memeriksa kesiapan kembali sebelum attempt baru', () async {
     final controller = await newController();
     final created = await controller.createTeacherSession(

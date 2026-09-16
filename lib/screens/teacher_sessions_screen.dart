@@ -10,6 +10,7 @@ import 'session_qr_screen.dart';
 class TeacherSessionsScreen extends StatefulWidget {
   const TeacherSessionsScreen({
     this.sessions = const [],
+    this.canCreateSession = true,
     this.onCreateSession,
     this.onShowQr,
     this.loadSessions,
@@ -17,6 +18,7 @@ class TeacherSessionsScreen extends StatefulWidget {
   });
 
   final List<ExamSession> sessions;
+  final bool canCreateSession;
   final FutureOr<void> Function()? onCreateSession;
   final ValueChanged<ExamSession>? onShowQr;
   final Future<List<ExamSession>> Function()? loadSessions;
@@ -130,7 +132,7 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
-            onPressed: _loading || _error != null
+            onPressed: _loading || _error != null || !widget.canCreateSession
                 ? null
                 : () => _createSession(context),
             style: FilledButton.styleFrom(
@@ -145,6 +147,13 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
+          if (!widget.canCreateSession) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'Perubahan sesi ditahan selama percobaan siswa berlangsung.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF595959)),
+            ),
+          ],
           const SizedBox(height: 32),
           Row(
             children: [
