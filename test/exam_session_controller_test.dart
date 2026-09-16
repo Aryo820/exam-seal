@@ -412,6 +412,72 @@ void main() {
     expect((await controller.loadCurrentAttempt())!.state, AttemptState.locked);
   });
 
+  test('akses mode guru mengonsumsi otorisasi PIN sesi terkunci', () async {
+    final controller = await newController();
+    final created = await controller.createTeacherSession(
+      examName: 'Matematika Kelas XI',
+      formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+    );
+    controller.attachProtectionStub(
+      screenProtectionReady: true,
+      notificationControlReady: true,
+    );
+    await controller.startStudentAttempt(created.session);
+    for (var count = 0; count < 3; count++) {
+      await controller.registerViolation('appLeftWhileActive');
+    }
+
+    expect(
+      await controller.verifySupervisorPin(created.pin, created.session),
+      isTrue,
+    );
+    controller.cancelSupervisorAuthorization();
+    expect(await controller.confirmContinueAfterPin(), isFalse);
+    expect(
+      await controller.verifySupervisorPin(created.pin, created.session),
+      isTrue,
+    );
+    expect(await controller.authorizeTeacherModeAfterVerifiedPin(), isTrue);
+    expect(await controller.confirmContinueAfterPin(), isFalse);
+    expect((await controller.loadCurrentAttempt())!.state, AttemptState.locked);
+
+    expect(
+      await controller.verifySupervisorPin(created.pin, created.session),
+      isTrue,
+    );
+    await controller.supervisorEnd(
+      created.pin,
+      reason: 'Pengawas mengakhiri sesi.',
+    );
+    expect(await controller.authorizeTeacherModeAfterVerifiedPin(), isFalse);
+  });
+
+  test(
+    'mode guru aktif memakai PIN sesi tanpa meninggalkan otorisasi aksi',
+    () async {
+      final controller = await newController();
+      final created = await controller.createTeacherSession(
+        examName: 'Matematika Kelas XI',
+        formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
+      );
+      controller.attachProtectionStub(
+        screenProtectionReady: true,
+        notificationControlReady: true,
+      );
+      await controller.startStudentAttempt(created.session);
+
+      expect(
+        await controller.authorizeTeacherMode(created.pin, created.session),
+        isTrue,
+      );
+      expect(await controller.confirmContinueAfterPin(), isFalse);
+      expect(
+        (await controller.loadCurrentAttempt())!.state,
+        AttemptState.active,
+      );
+    },
+  );
+
   test('pengulangan memeriksa kesiapan kembali sebelum attempt baru', () async {
     final controller = await newController();
     final created = await controller.createTeacherSession(

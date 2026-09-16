@@ -106,4 +106,47 @@ void main() {
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isTrue);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Back dari keputusan membatalkan otorisasi pengawas', (
+    tester,
+  ) async {
+    var authorizationCancelled = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LockedScreen(
+          session: ExamSession(
+            schemaVersion: 1,
+            sessionId: 's',
+            sessionCode: 'MTH-7K2P',
+            examName: 'Matematika Kelas XI',
+            formUrl: Uri.parse(
+              'https://docs.google.com/forms/d/e/example/viewform',
+            ),
+          ),
+          violationCount: 3,
+          violationReason: 'Batas pelanggaran tercapai.',
+          verifySupervisorPin: (pin) => pin == '01234',
+          onContinueExam: () {},
+          onEndExam: () {},
+          onAuthorizationCancelled: () => authorizationCancelled = true,
+        ),
+      ),
+    );
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('PIN Pengawas').hitTestable());
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '01234');
+    tester.testTextInput.hide();
+    await tester.pump();
+    await tester.tap(find.text('Verifikasi PIN'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tentukan penanganan'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Ujian dikunci'), findsOneWidget);
+    expect(authorizationCancelled, isTrue);
+  });
 }

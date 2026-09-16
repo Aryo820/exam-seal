@@ -23,6 +23,7 @@ class ExamScreen extends StatefulWidget {
     required this.endAttemptWithAuthorization,
     required this.retryRestoreSettings,
     required this.onReturnHome,
+    this.onOpenTeacherMode,
     this.formContent,
     this.protectionNotice,
     super.key,
@@ -52,6 +53,7 @@ class ExamScreen extends StatefulWidget {
 
   final FutureOr<bool> Function() retryRestoreSettings;
   final VoidCallback onReturnHome;
+  final VoidCallback? onOpenTeacherMode;
   final Widget? formContent;
   final ValueListenable<String?>? protectionNotice;
 
@@ -183,6 +185,7 @@ class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
                   _Header(
                     session: widget.session,
                     violationCount: _violationCount,
+                    onOpenTeacherMode: widget.onOpenTeacherMode,
                   ),
                   if (_notice != null)
                     MaterialBanner(
@@ -235,10 +238,15 @@ class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.session, required this.violationCount});
+  const _Header({
+    required this.session,
+    required this.violationCount,
+    this.onOpenTeacherMode,
+  });
 
   final ExamSession session;
   final int violationCount;
+  final VoidCallback? onOpenTeacherMode;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -263,6 +271,12 @@ class _Header extends StatelessWidget {
               'Pelanggaran: $violationCount',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
+            if (onOpenTeacherMode != null)
+              IconButton(
+                onPressed: onOpenTeacherMode,
+                tooltip: 'Mode Guru',
+                icon: const Icon(Icons.admin_panel_settings_outlined),
+              ),
           ],
         ),
         const SizedBox(height: 6),

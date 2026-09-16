@@ -4,6 +4,47 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('S07 membuka mode guru sebagai satu keputusan', (tester) async {
+    SupervisorDecision? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () async {
+              result = await Navigator.of(context).push<SupervisorDecision>(
+                MaterialPageRoute<SupervisorDecision>(
+                  builder: (_) => SupervisorDecisionScreen(
+                    session: ExamSession(
+                      schemaVersion: 1,
+                      sessionId: 's',
+                      sessionCode: 'MTH-7K2P',
+                      examName: 'Matematika Kelas XI',
+                      formUrl: Uri.parse(
+                        'https://docs.google.com/forms/d/e/example/viewform',
+                      ),
+                    ),
+                    violationCount: 3,
+                    latestViolationReason: 'Batas pelanggaran tercapai.',
+                  ),
+                ),
+              );
+            },
+            child: const Text('Buka keputusan'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Buka keputusan'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Buka Mode Guru').hitTestable());
+    await tester.pumpAndSettle();
+
+    expect(result, SupervisorDecision.openTeacherMode);
+  });
+
   testWidgets('S07 requires confirmation before ending the exam', (
     tester,
   ) async {

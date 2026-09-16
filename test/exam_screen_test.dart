@@ -266,6 +266,38 @@ void main() {
       expect(find.text('Pelanggaran: 3'), findsOneWidget);
     },
   );
+
+  testWidgets('mode guru aktif hanya dibuka melalui callback aplikasi', (
+    tester,
+  ) async {
+    var opened = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExamScreen(
+          session: session(),
+          violationCount: 0,
+          violationReason: null,
+          verifySupervisorPin: (_) => false,
+          cancelEndAuthorization: () {},
+          registerViolation: (_) async => const ViolationResultMsg(
+            outcome: ViolationOutcome.warned,
+            violationCount: 1,
+            reason: 'appLeftWhileActive',
+          ),
+          recordAmbiguousEvent: (_) async {},
+          onViolationLock: () async {},
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          onOpenTeacherMode: () => opened = true,
+          formContent: const Text('Google Forms'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Mode Guru'));
+    expect(opened, isTrue);
+  });
 }
 
 class _StatefulForm extends StatefulWidget {

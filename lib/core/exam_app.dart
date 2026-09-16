@@ -15,6 +15,7 @@ import '../screens/exam_screen.dart';
 import '../screens/form_test_screen.dart';
 import '../screens/form_test_run_screen.dart';
 import '../screens/supervisor_pin_access_screen.dart';
+import '../screens/supervisor_pin_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/locked_screen.dart';
 import '../screens/pre_exam_screen.dart';
@@ -216,7 +217,11 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
 
   Widget _homeScreen() => HomeScreen(
     hasActiveStudentSession: _current != null,
-    verifySupervisorPin: _verifySupervisorPin,
+    verifySupervisorPin: (pin) async {
+      final session = _current?.session;
+      return session != null &&
+          await controller.authorizeTeacherMode(pin, session);
+    },
     onResumeStudentSession: _resumeStoredAttempt,
     onOpenTeacherMode: () => unawaited(_openTeacherMode()),
     onOpenStudentScan: () => _navigatorKey.currentState?.push(
@@ -234,6 +239,25 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  Future<void> _openTeacherModeFromActive(ExamSession session) async {
+    final verified = await _navigatorKey.currentState?.push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => SupervisorPinScreen(
+          heading: 'Buka mode guru',
+          description:
+              'Masukkan PIN pengawas lima digit. Sesi siswa tetap aktif.',
+          verifyPin: (pin) => controller.authorizeTeacherMode(pin, session),
+        ),
+      ),
+    );
+    if (verified == true && mounted) await _openTeacherMode();
+  }
+
+  Future<void> _openTeacherModeAfterVerifiedPin() async {
+    if (!await controller.authorizeTeacherModeAfterVerifiedPin()) return;
+    if (mounted) await _openTeacherMode();
   }
 
   Future<void> _openCreateSession() async {
@@ -426,6 +450,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       ),
       retryRestoreSettings: controller.retryRestoreSettings,
       onReturnHome: _goHome,
+      onOpenTeacherMode: () => unawaited(_openTeacherModeFromActive(session)),
     );
   }
 
@@ -449,6 +474,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       verifySupervisorPin: _verifySupervisorPin,
       onContinueExam: _continueProtectedAttempt,
       onAuthorizationCancelled: controller.cancelSupervisorAuthorization,
+      onOpenTeacherMode: _openTeacherModeAfterVerifiedPin,
       onEndExam: () async {
         if (!await controller.authorizeEndAfterVerifiedPin()) return;
         final restored = await controller.finishAttemptAfterPin(
@@ -471,6 +497,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       verifySupervisorPin: _verifySupervisorPin,
       onContinueExam: _continueProtectedAttempt,
       onAuthorizationCancelled: controller.cancelSupervisorAuthorization,
+      onOpenTeacherMode: _openTeacherModeAfterVerifiedPin,
       onEndExam: () async {
         if (!await controller.authorizeEndAfterVerifiedPin()) return;
         final restored = await controller.finishAttemptAfterPin(

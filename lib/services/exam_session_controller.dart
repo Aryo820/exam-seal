@@ -541,10 +541,26 @@ class ExamSessionController {
       storedSession ?? session,
       session.sessionId,
     );
-    if (verified && current != null) {
+    if (verified &&
+        current != null &&
+        (current.state == AttemptState.locked ||
+            current.state == AttemptState.recoveryPending)) {
       _verifiedPinAttemptId = current.attemptId;
     }
     return verified;
+  }
+
+  /// Otorisasi langsung mode guru ketika attempt siswa masih aktif. Tidak
+  /// menghasilkan token yang dapat dipakai ulang oleh aksi lain.
+  Future<bool> authorizeTeacherMode(String pin, ExamSession session) async {
+    final current = await _store.loadCurrentAttempt();
+    final storedSession = current?.session;
+    if (current == null ||
+        storedSession == null ||
+        storedSession.sessionId != session.sessionId) {
+      return false;
+    }
+    return _verifyPinInScope(pin, storedSession, current.sessionId);
   }
 
   /// Otorisasi khusus untuk mengakhiri attempt aktif. Hanya berlaku sekali
@@ -568,11 +584,28 @@ class ExamSessionController {
   /// attempt aktif. Token tetap hanya berlaku satu kali dan tidak persisten.
   Future<bool> authorizeEndAfterVerifiedPin() async {
     final current = await _store.loadCurrentAttempt();
-    if (current == null || _verifiedPinAttemptId != current.attemptId) {
+    if (current == null ||
+        _verifiedPinAttemptId != current.attemptId ||
+        (current.state != AttemptState.locked &&
+            current.state != AttemptState.recoveryPending)) {
       return false;
     }
     _verifiedPinAttemptId = null;
     _endAuthorizationAttemptId = current.attemptId;
+    return true;
+  }
+
+  /// Gunakan PIN yang baru diverifikasi dari layar keputusan untuk membuka
+  /// mode guru, lalu hapus otorisasi agar tidak dapat dipakai aksi lain.
+  Future<bool> authorizeTeacherModeAfterVerifiedPin() async {
+    final current = await _store.loadCurrentAttempt();
+    if (current == null ||
+        _verifiedPinAttemptId != current.attemptId ||
+        (current.state != AttemptState.locked &&
+            current.state != AttemptState.recoveryPending)) {
+      return false;
+    }
+    _verifiedPinAttemptId = null;
     return true;
   }
 
