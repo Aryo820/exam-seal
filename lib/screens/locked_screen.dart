@@ -11,7 +11,6 @@ class LockedScreen extends StatefulWidget {
     required this.violationReason,
     required this.onContinueExam,
     required this.onEndExam,
-    this.onOpenTeacherMode,
     super.key,
   }) : assert(violationCount >= 3);
 
@@ -20,7 +19,6 @@ class LockedScreen extends StatefulWidget {
   final String violationReason;
   final VoidCallback onContinueExam;
   final VoidCallback onEndExam;
-  final Future<void> Function()? onOpenTeacherMode;
 
   @override
   State<LockedScreen> createState() => _LockedScreenState();
@@ -41,8 +39,6 @@ class _LockedScreenState extends State<LockedScreen> {
       widget.onContinueExam();
     } else if (decision == SupervisorDecision.endExam) {
       widget.onEndExam();
-    } else if (decision == SupervisorDecision.openTeacherMode) {
-      await widget.onOpenTeacherMode?.call();
     }
   }
 

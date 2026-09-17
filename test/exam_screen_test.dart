@@ -222,10 +222,7 @@ void main() {
       expect(find.text('Pelanggaran: 3'), findsOneWidget);
     },
   );
-  testWidgets('mode guru aktif hanya dibuka melalui callback aplikasi', (
-    tester,
-  ) async {
-    var opened = false;
+  testWidgets('header ujian aktif tidak membuka mode guru', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: ExamScreen(
@@ -242,13 +239,470 @@ void main() {
           endAttemptWithAuthorization: () async => true,
           retryRestoreSettings: () => true,
           onReturnHome: () {},
-          onOpenTeacherMode: () => opened = true,
           formContent: const Text('Google Forms'),
         ),
       ),
     );
-    await tester.tap(find.byTooltip('Mode Guru'));
-    expect(opened, isTrue);
+    expect(find.byTooltip('Mode Guru'), findsNothing);
+    expect(find.text('Pelanggaran: 0'), findsOneWidget);
+  });
+  testWidgets('kepergian lama dihitung sekali dan memicu alert native', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 1, 1);
+    var registered = 0;
+    var alerts = 0;
+    var ambiguousEvents = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExamScreen(
+          session: session(),
+          violationCount: 0,
+          violationReason: null,
+          clock: () => now,
+          departureGrace: const Duration(seconds: 2),
+          registerViolation: (_) async {
+            registered++;
+            return ViolationResultMsg(
+              outcome: ViolationOutcome.warned,
+              violationCount: registered,
+              reason: 'appLeftWhileActive',
+            );
+          },
+          recordAmbiguousEvent: (_) async {
+            ambiguousEvents++;
+          },
+          onViolationLock: () async {},
+          onWarningAlert: () async {
+            alerts++;
+          },
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          formContent: const Text('Google Forms'),
+        ),
+      ),
+    );
+    // Satu kepergian memancarkan beberapa callback: tetap satu hitungan.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    now = now.add(const Duration(seconds: 5));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(registered, 1);
+    expect(alerts, 1);
+    expect(ambiguousEvents, greaterThanOrEqualTo(1));
+    expect(find.text('Peringatan pertama'), findsOneWidget);
+    expect(find.text('Pelanggaran: 1'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('kepergian singkat hanya ambigu tanpa hitungan dan alert', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 1, 1);
+    var registered = 0;
+    var alerts = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExamScreen(
+          session: session(),
+          violationCount: 0,
+          violationReason: null,
+          clock: () => now,
+          departureGrace: const Duration(seconds: 2),
+          registerViolation: (_) async {
+            registered++;
+            return const ViolationResultMsg(
+              outcome: ViolationOutcome.warned,
+              violationCount: 1,
+              reason: 'appLeftWhileActive',
+            );
+          },
+          recordAmbiguousEvent: (_) async {},
+          onViolationLock: () async {},
+          onWarningAlert: () async {
+            alerts++;
+          },
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          formContent: const Text('Google Forms'),
+        ),
+      ),
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    now = now.add(const Duration(seconds: 1));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(registered, 0);
+    expect(alerts, 0);
+    expect(find.text('Pelanggaran: 0'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('pelanggaran ketiga dari lifecycle memanggil kunci + alert', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 1, 1);
+    var locked = false;
+    var alerts = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExamScreen(
+          session: session(),
+          violationCount: 2,
+          violationReason: 'Anda meninggalkan layar ujian.',
+          clock: () => now,
+          departureGrace: const Duration(seconds: 2),
+          registerViolation: (_) async => const ViolationResultMsg(
+            outcome: ViolationOutcome.locked,
+            violationCount: 3,
+            reason: 'appLeftWhileActive',
+          ),
+          recordAmbiguousEvent: (_) async {},
+          onViolationLock: () async {
+            locked = true;
+          },
+          onWarningAlert: () async {
+            alerts++;
+          },
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          formContent: const Text('Google Forms'),
+        ),
+      ),
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    now = now.add(const Duration(seconds: 5));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(locked, isTrue);
+    expect(alerts, 1);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('lifecycle tidak dihitung bila attempt sudah tidak aktif', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 1, 1);
+    var registered = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExamScreen(
+          session: session(),
+          violationCount: 0,
+          violationReason: null,
+          attemptActive: false,
+          clock: () => now,
+          departureGrace: const Duration(seconds: 2),
+          registerViolation: (_) async {
+            registered++;
+            return const ViolationResultMsg(
+              outcome: ViolationOutcome.warned,
+              violationCount: 1,
+              reason: 'appLeftWhileActive',
+            );
+          },
+          recordAmbiguousEvent: (_) async {},
+          onViolationLock: () async {},
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          formContent: const Text('Google Forms'),
+        ),
+      ),
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    now = now.add(const Duration(seconds: 5));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(registered, 0);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('keluar disengaja dihitung walau kembali dengan cepat', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 1, 1);
+    var registered = 0;
+    var alerts = 0;
+    final exitSignal = ValueNotifier<int>(0);
+    addTearDown(exitSignal.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExamScreen(
+          session: session(),
+          violationCount: 0,
+          violationReason: null,
+          clock: () => now,
+          departureGrace: const Duration(seconds: 2),
+          userExitSignal: exitSignal,
+          registerViolation: (_) async {
+            registered++;
+            return ViolationResultMsg(
+              outcome: ViolationOutcome.warned,
+              violationCount: registered,
+              reason: 'appLeftWhileActive',
+            );
+          },
+          recordAmbiguousEvent: (_) async {},
+          onViolationLock: () async {},
+          onWarningAlert: () async {
+            alerts++;
+          },
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          formContent: const Text('Google Forms'),
+        ),
+      ),
+    );
+    // Sinyal native tiba dulu (urutan asinkron versi 1) ...
+    exitSignal.value++;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    // ... kembali sebelum ambang 2 detik: tetap dihitung karena disengaja.
+    now = now.add(const Duration(milliseconds: 500));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(registered, 1);
+    expect(alerts, 1);
+    expect(find.text('Peringatan pertama'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('sinyal di tengah kepergian tetap mengonfirmasi hitungan', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 1, 1);
+    var registered = 0;
+    final exitSignal = ValueNotifier<int>(0);
+    addTearDown(exitSignal.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExamScreen(
+          session: session(),
+          violationCount: 0,
+          violationReason: null,
+          clock: () => now,
+          departureGrace: const Duration(seconds: 2),
+          userExitSignal: exitSignal,
+          registerViolation: (_) async {
+            registered++;
+            return ViolationResultMsg(
+              outcome: ViolationOutcome.warned,
+              violationCount: registered,
+              reason: 'appLeftWhileActive',
+            );
+          },
+          recordAmbiguousEvent: (_) async {},
+          onViolationLock: () async {},
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          formContent: const Text('Google Forms'),
+        ),
+      ),
+    );
+    // Urutan asinkron versi 2: lifecycle dulu, sinyal menyusul.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    exitSignal.value++;
+    now = now.add(const Duration(milliseconds: 500));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(registered, 1);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('unpin paksa dihitung walau kembali dengan cepat', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 1, 1);
+    var registered = 0;
+    var alerts = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExamScreen(
+          session: session(),
+          violationCount: 0,
+          violationReason: null,
+          clock: () => now,
+          departureGrace: const Duration(seconds: 2),
+          isScreenPinned: () async => false,
+          registerViolation: (_) async {
+            registered++;
+            return ViolationResultMsg(
+              outcome: ViolationOutcome.warned,
+              violationCount: registered,
+              reason: 'appLeftWhileActive',
+            );
+          },
+          recordAmbiguousEvent: (_) async {},
+          onViolationLock: () async {},
+          onWarningAlert: () async {
+            alerts++;
+          },
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          formContent: const Text('Google Forms'),
+        ),
+      ),
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    now = now.add(const Duration(milliseconds: 500));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(registered, 1);
+    expect(alerts, 1);
+    expect(find.text('Peringatan pertama'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('unpin paksa langsung mengunci tanpa jalur normal', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 1, 1);
+    var normalRegistered = 0;
+    var severeRegistered = 0;
+    var locked = false;
+    var alerts = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExamScreen(
+          session: session(),
+          violationCount: 0,
+          violationReason: null,
+          clock: () => now,
+          departureGrace: const Duration(seconds: 2),
+          isScreenPinned: () async => false,
+          registerViolation: (_) async {
+            normalRegistered++;
+            return ViolationResultMsg(
+              outcome: ViolationOutcome.warned,
+              violationCount: normalRegistered,
+              reason: 'appLeftWhileActive',
+            );
+          },
+          registerSevereViolation: (_) async {
+            severeRegistered++;
+            return const ViolationResultMsg(
+              outcome: ViolationOutcome.locked,
+              violationCount: 3,
+              reason: 'Anda melepas kunci layar ujian.',
+            );
+          },
+          recordAmbiguousEvent: (_) async {},
+          onViolationLock: () async {
+            locked = true;
+          },
+          onWarningAlert: () async {
+            alerts++;
+          },
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          formContent: const Text('Google Forms'),
+        ),
+      ),
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    now = now.add(const Duration(milliseconds: 500));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(severeRegistered, 1);
+    expect(normalRegistered, 0);
+    expect(locked, isTrue);
+    expect(alerts, 1);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('pin utuh dan singkat tetap ambigu tanpa hitungan', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 1, 1);
+    var registered = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExamScreen(
+          session: session(),
+          violationCount: 0,
+          violationReason: null,
+          clock: () => now,
+          departureGrace: const Duration(seconds: 2),
+          isScreenPinned: () async => true,
+          registerViolation: (_) async {
+            registered++;
+            return const ViolationResultMsg(
+              outcome: ViolationOutcome.warned,
+              violationCount: 1,
+              reason: 'appLeftWhileActive',
+            );
+          },
+          recordAmbiguousEvent: (_) async {},
+          onViolationLock: () async {},
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          formContent: const Text('Google Forms'),
+        ),
+      ),
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    now = now.add(const Duration(milliseconds: 500));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(registered, 0);
+    expect(find.text('Pelanggaran: 0'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('dua kepergian disengaja dihitung dua kali', (tester) async {
+    var now = DateTime(2026, 1, 1);
+    var registered = 0;
+    final exitSignal = ValueNotifier<int>(0);
+    addTearDown(exitSignal.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExamScreen(
+          session: session(),
+          violationCount: 0,
+          violationReason: null,
+          clock: () => now,
+          departureGrace: const Duration(seconds: 2),
+          userExitSignal: exitSignal,
+          registerViolation: (_) async {
+            registered++;
+            return ViolationResultMsg(
+              outcome: ViolationOutcome.warned,
+              violationCount: registered,
+              reason: 'appLeftWhileActive',
+            );
+          },
+          recordAmbiguousEvent: (_) async {},
+          onViolationLock: () async {},
+          endAttemptWithAuthorization: () async => true,
+          retryRestoreSettings: () => true,
+          onReturnHome: () {},
+          formContent: const Text('Google Forms'),
+        ),
+      ),
+    );
+    for (var i = 0; i < 2; i++) {
+      exitSignal.value++;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      now = now.add(const Duration(milliseconds: 500));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Kembali ke Ujian'));
+      await tester.pumpAndSettle();
+    }
+
+    expect(registered, 2);
+    expect(find.text('Pelanggaran: 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 

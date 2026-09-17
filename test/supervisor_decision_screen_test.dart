@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('S07 membuka mode guru sebagai satu keputusan', (tester) async {
+  testWidgets('S07 tanpa PIN: hanya Lanjutkan dan Akhiri, tanpa Mode Guru', (
+    tester,
+  ) async {
     SupervisorDecision? result;
     await tester.pumpWidget(
       MaterialApp(
@@ -39,10 +41,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Buka Mode Guru').hitTestable());
-    await tester.pumpAndSettle();
-
-    expect(result, SupervisorDecision.openTeacherMode);
+    expect(find.text('Lanjutkan Ujian').hitTestable(), findsOneWidget);
+    expect(find.text('Akhiri Ujian').hitTestable(), findsOneWidget);
+    expect(find.text('Buka Mode Guru'), findsNothing);
+    expect(result, isNull);
   });
 
   testWidgets('S07 requires confirmation before ending the exam', (

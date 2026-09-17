@@ -80,6 +80,12 @@ class ExamSessionController {
   ExamProtectionBridge? _protection;
   bool _startingStudentAttempt = false;
 
+  /// Polling verifikasi screen pin. Dialog persetujuan sistem bersifat
+  /// asinkron sehingga satu cek langsung tidak cukup. Field (bukan const)
+  /// agar test bisa mempersingkat tanpa menunggu waktu produksi.
+  Duration pinPollInterval = const Duration(seconds: 1);
+  int pinPollAttempts = 20;
+
   ExamProtectionBridge? get protection => _protection;
 
   /// Ikat ExamProtection native (dipanggil composition root sekali).
@@ -158,9 +164,12 @@ class ExamSessionController {
     return result;
   }
 
+  /// Daftar Mode Guru: HANYA sesi buatan lokal. Sesi hasil scan di HP
+  /// siswa disembunyikan agar tidak bisa ditampilkan QR-nya ulang atau
+  /// dihapus (menghapus = menghilangkan riwayat pelanggarannya sendiri).
   Future<List<ExamSession>> listTeacherSessions() =>
       _withTeacherModeAccess(() async {
-        final sessions = await _store.listSessions();
+        final sessions = await _store.listLocalSessions();
         return sessions;
       });
 
@@ -344,13 +353,31 @@ class ExamSessionController {
       }
       final history = await _store.loadAttemptsFor(session.sessionId);
       final attemptNumber = history.length + 1;
-      await _store.startProtectedAttempt(
+      final attemptId = await _store.startProtectedAttempt(
         session,
         attemptNumber: attemptNumber,
         secureWindowActive: true,
         notificationProtectionActive: true,
         notificationAccessGranted: protection.notificationControlReady,
       );
+      // Nyalakan observasi native. Best-effort: kegagalan guard tidak
+      // menggagalkan ujian — proteksi keras (FLAG_SECURE/DND) sudah
+      // terverifikasi di atas, guard hanya melengkapi catatan sinyal.
+      await _startGuardBestEffort(protection);
+      // Kunci layar TERAKHIR dan terverifikasi: dialog persetujuan sistem
+      // muncul di titik ini (ExamScreen belum mounted sehingga tidak ada
+      // hitungan palsu). Penolakan = tolak mulai + rollback penuh
+      // termasuk menghapus attempt yatim agar tidak ada attempt aktif
+      // yang menahan tanpa jalan keluar yang sah.
+      if (!await _pinAndVerify(protection)) {
+        await _cancelPreparedProtection(session, protection);
+        await _store.deleteAttempt(attemptId);
+        return const StartAttemptResult(
+          started: false,
+          reason:
+              'Kunci layar ditolak atau dibatalkan. Ujian tidak dapat dimulai. Minta bantuan pengawas atau gunakan ujian alternatif.',
+        );
+      }
       return const StartAttemptResult(started: true);
     } on StorageFailure catch (e) {
       // Persist gagal: jangan beri akses soal; coba lepas proteksi.
@@ -376,11 +403,63 @@ class ExamSessionController {
     ExamProtectionBridge protection,
   ) async {
     try {
+      await _stopGuardBestEffort(protection);
+      await _stopPinBestEffort(protection);
       if (await protection.deactivate()) {
         await _store.clearPreparedProtectionActivation(session.sessionId);
       }
     } catch (_) {
       // Penanda tetap tersimpan agar boot dapat mencoba pemulihan lagi.
+    }
+  }
+
+  /// Nyalakan ExamGuard tanpa pernah melempar: observasi gagal bukan
+  /// alasan menggagalkan ujian yang proteksi kerasnya sudah aktif.
+  Future<void> _startGuardBestEffort(ExamProtectionBridge protection) async {
+    try {
+      await protection.startExamGuard();
+    } catch (_) {
+      // Diabaikan: sinyal native hanya pelengkap catatan ambigu.
+    }
+  }
+
+  /// Matikan ExamGuard tanpa pernah melempar.
+  Future<void> _stopGuardBestEffort(ExamProtectionBridge protection) async {
+    try {
+      await protection.stopExamGuard();
+    } catch (_) {
+      // Diabaikan: yang penting proteksi keras dipulihkan pemanggil.
+    }
+  }
+
+  /// Minta kunci layar lalu verifikasi lewat polling. True hanya bila
+  /// [isScreenPinned] terkonfirmasi. Penolakan/pembatalan dialog sistem
+  /// oleh pengguna menghasilkan false (bukan exception) — pemanggil
+  /// memutuskan: tolak mulai ujian + tawarkan ujian alternatif.
+  Future<bool> _pinAndVerify(ExamProtectionBridge protection) async {
+    try {
+      await protection.requestScreenPin();
+    } catch (_) {
+      return false;
+    }
+    for (var i = 0; i < pinPollAttempts; i++) {
+      try {
+        if (await protection.isScreenPinned()) return true;
+      } catch (_) {
+        return false;
+      }
+      await Future<void>.delayed(pinPollInterval);
+    }
+    return false;
+  }
+
+  /// Lepas kunci layar tanpa pernah melempar. Aman dipanggil walau tidak
+  /// ter-pin (no-op di native).
+  Future<void> _stopPinBestEffort(ExamProtectionBridge protection) async {
+    try {
+      await protection.stopScreenPin();
+    } catch (_) {
+      // Diabaikan: pin bukan proteksi data, hanya kunci navigasi.
     }
   }
 
@@ -427,6 +506,12 @@ class ExamSessionController {
     if (current == null) {
       throw StateError('Tidak ada attempt aktif.');
     }
+    // FR05: pelanggaran hanya relevan saat attempt aktif. Tanpa penjagaan
+    // ini, lifecycle dari layar yang sudah tertutup (Offstage) atau balapan
+    // dengan penguncian bisa menggelembungkan counter yang sudah terkunci.
+    if (current.state != AttemptState.active) {
+      throw StateError('Pelanggaran hanya relevan pada attempt aktif.');
+    }
     if (!AttemptStateMachine.countedViolationTriggers.contains(triggerType)) {
       throw ArgumentError.value(
         triggerType,
@@ -454,6 +539,46 @@ class ExamSessionController {
     return ViolationResult(
       outcome: outcome,
       violationCount: machine.violationCount,
+      reason: AttemptStateMachine.describeTrigger(triggerType),
+    );
+  }
+
+  /// Daftarkan pelanggaran BERAT (matriks v4, mis. unpin paksa): langsung
+  /// mengunci ujian dari hitungan berapa pun. Counter dilompatkan ke
+  /// ambang agar setelah dilanjutkan pengawas, pelanggaran berikutnya
+  /// langsung mengunci lagi. Persist SEBELUM UI berpindah, seperti jalur
+  /// normal. Selalu menghasilkan [ViolationOutcome.locked].
+  Future<ViolationResult> registerSevereViolation(String triggerType) async {
+    final current = await _store.loadCurrentAttempt();
+    if (current == null) {
+      throw StateError('Tidak ada attempt aktif.');
+    }
+    if (current.state != AttemptState.active) {
+      throw StateError('Pelanggaran hanya relevan pada attempt aktif.');
+    }
+    if (!AttemptStateMachine.severeViolationTriggers.contains(triggerType)) {
+      throw ArgumentError.value(
+        triggerType,
+        'triggerType',
+        'Pemicu berat tidak terverifikasi.',
+      );
+    }
+    final correlationId = 'corr-${_now().millisecondsSinceEpoch}';
+    final counterAfter = AttemptStateMachine.severeCounterAfter(
+      current.violationCount,
+    );
+
+    await _store.recordViolation(
+      attemptId: current.attemptId,
+      eventType: triggerType,
+      counterAfter: counterAfter,
+      state: AttemptState.locked,
+      correlationId: correlationId,
+    );
+
+    return ViolationResult(
+      outcome: ViolationOutcome.locked,
+      violationCount: counterAfter,
       reason: AttemptStateMachine.describeTrigger(triggerType),
     );
   }
@@ -503,6 +628,7 @@ class ExamSessionController {
         await _cancelPreparedProtection(session, protection);
         return false;
       }
+      await _startGuardBestEffort(protection);
       await _store.saveProtectionState(
         attemptId: current.attemptId,
         secureWindowActive: true,
@@ -522,6 +648,18 @@ class ExamSessionController {
         result: 'resumed',
       );
       await _store.clearPreparedProtectionActivation(session.sessionId);
+      // Kunci layar ulang: pin tidak selamat dari process death, dan
+      // ujian tidak boleh berjalan tanpa pin. Gagal = kembalikan state
+      // semula agar tidak ada attempt aktif yang tak terkunci.
+      if (!await _pinAndVerify(protection)) {
+        await _store.setAttemptState(
+          current.attemptId,
+          current.state,
+          violationCount: current.violationCount,
+        );
+        await _cancelPreparedProtection(session, protection);
+        return false;
+      }
       return true;
     } catch (_) {
       if (prepared) await _cancelPreparedProtection(session, protection);
@@ -544,6 +682,12 @@ class ExamSessionController {
     var restored = false;
     final protection = _protection;
     if (protection != null) {
+      // Hentikan observasi dulu: tidak ada lagi sinyal yang relevan
+      // setelah attempt berakhir.
+      await _stopGuardBestEffort(protection);
+      // Lepas pin agar HP kembali normal untuk pengawas/siswa. Best-effort:
+      // kegagalannya tidak membatalkan status berakhir yang sudah persist.
+      await _stopPinBestEffort(protection);
       try {
         restored = await protection.restore();
       } catch (_) {
@@ -656,6 +800,23 @@ abstract class ExamProtectionBridge {
   Future<bool> restore();
   bool get screenProtectionReady;
   bool get notificationControlReady;
+
+  /// Monitoring lifecycle native (observasi saja). Implementasi default
+  /// true agar stub test lama tetap berperilaku seperti guard menyala.
+  Future<bool> startExamGuard() => Future.value(true);
+
+  /// Matikan monitoring. Implementasi default aman untuk stub.
+  Future<bool> stopExamGuard() => Future.value(true);
+
+  /// Minta kunci layar (screen pinning). Default terkirim agar stub lama
+  /// tidak mengubah hasil test yang sudah ada.
+  Future<bool> requestScreenPin() => Future.value(true);
+
+  /// Lepas kunci layar. Default aman untuk stub.
+  Future<bool> stopScreenPin() => Future.value(true);
+
+  /// Status pin terverifikasi. Default true agar stub lama lolos.
+  Future<bool> isScreenPinned() => Future.value(true);
 }
 
 class _StubProtection implements ExamProtectionBridge {
@@ -685,4 +846,19 @@ class _StubProtection implements ExamProtectionBridge {
 
   @override
   Future<bool> restore() async => _restoreSucceeds;
+
+  @override
+  Future<bool> startExamGuard() async => true;
+
+  @override
+  Future<bool> stopExamGuard() async => true;
+
+  @override
+  Future<bool> requestScreenPin() async => true;
+
+  @override
+  Future<bool> stopScreenPin() async => true;
+
+  @override
+  Future<bool> isScreenPinned() async => true;
 }

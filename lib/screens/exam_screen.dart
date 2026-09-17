@@ -21,9 +21,15 @@ class ExamScreen extends StatefulWidget {
     required this.endAttemptWithAuthorization,
     required this.retryRestoreSettings,
     required this.onReturnHome,
-    this.onOpenTeacherMode,
     this.formContent,
     this.protectionNotice,
+    this.attemptActive = true,
+    this.clock,
+    this.departureGrace = const Duration(seconds: 2),
+    this.onWarningAlert,
+    this.userExitSignal,
+    this.isScreenPinned,
+    this.registerSevereViolation,
     super.key,
   });
 
@@ -31,9 +37,52 @@ class ExamScreen extends StatefulWidget {
   final int violationCount;
   final String? violationReason;
 
+  /// Benar hanya bila attempt yang ditampilkan masih `active`. Induk
+  /// ([ExamApp]) wajib meneruskan false saat state sudah locked/pemulihan:
+  /// layar ini tetap mounted di balik lapisan terkunci (Offstage) sehingga
+  /// tanpa flag ini lifecycle bisa menambah counter yang sudah terkunci.
+  final bool attemptActive;
+
+  /// Jam untuk mengukur durasi kepergian (matriks FR05). Diisi test agar
+  /// deterministik; produksi memakai [DateTime.now].
+  final DateTime Function()? clock;
+
+  /// Ambang matriks v1 (FR05/Q03): kepergian yang lebih singkat dari ini
+  /// hanya dicatat ambigu ("kehilangan fokus saja bukan bukti").
+  final Duration departureGrace;
+
+  /// Dipanggil (best-effort, tanpa blokir UI) setiap kali pelanggaran
+  /// terhitung baru dipersist — untuk getar + bunyi peringatan native
+  /// (FR10). Opsional agar widget tetap bisa dipakai tanpa bridge native
+  /// di test. Induk mengisi dengan pemanggilan WarningManager.
+  final Future<void> Function()? onWarningAlert;
+
+  /// Penghitung sinyal keluar-disengaja native (`userInitiatedExit` dari
+  /// onUserLeaveHint: tombol Home/Recent). Induk menaikkan nilainya setiap
+  /// ada sinyal saat attempt aktif. Kenaikan yang terlihat di sini menandai
+  /// kepergian berjalan sebagai "disengaja" sehingga dihitung tanpa
+  /// menunggu ambang [departureGrace] (matriks v2, PRD FR05/Q03).
+  /// Opsional; null berarti tidak ada konfirmasi native.
+  final ValueListenable<int>? userExitSignal;
+
+  /// Tanya status screen pin native. Dipakai di [_handleReturn]: bila
+  /// attempt aktif tetapi pin sudah lepas (unpin paksa), kepergian dihitung
+  /// langsung tanpa grace (matriks v3) karena ini aksi sadar meloloskan
+  /// diri. Null = tidak ada pengecekan (perilaku lama, untuk test/widget
+  /// non-Android). Kegagalan query dianggap ter-pin (fail-open) agar
+  /// gangguan bridge tidak menjadi vonis.
+  final Future<bool> Function()? isScreenPinned;
+
   /// Mendaftarkan pelanggaran terbukti ke controller; hasilnya menentukan
   /// overlay peringatan atau penguncian.
   final Future<ViolationResultMsg> Function(String trigger) registerViolation;
+
+  /// Mendaftarkan pelanggaran BERAT (unpin paksa): langsung mengunci dari
+  /// hitungan berapa pun (matriks v4). Opsional agar widget tetap bisa
+  /// dipakai tanpa jalur berat; bila null, unpin mengikuti jalur hitungan
+  /// normal (tetap dihitung, tanpa grace).
+  final Future<ViolationResultMsg> Function(String trigger)?
+  registerSevereViolation;
 
   /// Mencatat event ambigu (panggilan, jaringan, fokus) tanpa counter.
   final Future<void> Function(String type) recordAmbiguousEvent;
@@ -49,7 +98,6 @@ class ExamScreen extends StatefulWidget {
 
   final FutureOr<bool> Function() retryRestoreSettings;
   final VoidCallback onReturnHome;
-  final VoidCallback? onOpenTeacherMode;
   final Widget? formContent;
   final ValueListenable<String?>? protectionNotice;
 
@@ -70,12 +118,45 @@ class ViolationResultMsg {
 }
 
 class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
+  /// Pemicu terhitung matriks v1 (PRD FR05/Q03): satu-satunya pemicu yang
+  /// boleh menambah counter. Lifecycle hanya boleh menembakkannya lewat
+  /// [_handleReturn], tidak langsung.
+  static const _countedTrigger = 'appLeftWhileActive';
+
+  /// Pemicu pelanggaran berat matriks v4: unpin paksa kunci layar.
+  static const _severeTrigger = 'screenUnpinned';
+
   String? _notice;
   bool _warningAcknowledged = false;
   bool _ending = false;
 
   int _violationCount = 0;
   String? _violationReason;
+
+  /// Pelacakan satu kepergian (FR05: satu aksi = satu hitungan).
+  /// [_awaySince] null berarti aplikasi dianggap di depan.
+  DateTime? _awaySince;
+  bool _departureReported = false;
+  bool _reporting = false;
+
+  /// True bila kepergian berjalan dikonfirmasi disengaja oleh sinyal
+  /// native (onUserLeaveHint). Pengecekan dilakukan di dua titik
+  /// (saat pergi dan saat kembali) karena urutan tiba sinyal native itu
+  /// asinkron dan bisa mendahului maupun menyusul callback lifecycle.
+  bool _userExitConfirmed = false;
+  int _lastSeenExitCount = 0;
+
+  DateTime _now() => widget.clock?.call() ?? DateTime.now();
+
+  /// Sinkronkan penanda keluar-disengaja dari induk. Dipanggil setiap
+  /// ada perubahan lifecycle agar urutan tiba sinyal tidak penting.
+  void _syncUserExitSignal() {
+    final count = widget.userExitSignal?.value ?? _lastSeenExitCount;
+    if (count != _lastSeenExitCount) {
+      _lastSeenExitCount = count;
+      _userExitConfirmed = true;
+    }
+  }
 
   @override
   void initState() {
@@ -106,15 +187,111 @@ class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden) {
-      // Lifecycle tidak membuktikan pengguna berpindah aplikasi: panggilan
-      // atau dialog OS dapat menghasilkan sinyal yang sama.
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      // Selalu catat ambigu dulu (FR05): sinyal ini saja bukan bukti.
       unawaited(widget.recordAmbiguousEvent('focusLost'));
+      // Tandai awal kepergian sekali saja; callback beruntun dari satu
+      // kepergian yang sama tidak boleh membuka hitungan baru. Flag
+      // direset di sini sehingga kepergian berikutnya bisa dihitung lagi.
+      if (_awaySince == null) {
+        _awaySince = _now();
+        _departureReported = false;
+      }
+      _syncUserExitSignal();
+    } else if (state == AppLifecycleState.resumed) {
+      _syncUserExitSignal();
+      unawaited(_handleReturn());
+    }
+  }
+
+  /// Evaluasi saat kembali ke aplikasi (matriks v2/v3/v4, PRD FR05/Q03).
+  /// Dihitung bila attempt masih active, kepergian belum dilaporkan, dan:
+  /// - pin layar sudah lepas paksa → pelanggaran BERAT, langsung kunci
+  ///   (matriks v4, tanpa ambang), ATAU
+  /// - kepergian dikonfirmasi disengaja sinyal native (tanpa ambang), ATAU
+  /// - durasi pergi mencapai [ExamScreen.departureGrace].
+  /// Kepergian singkat tanpa konfirmasi dan pin utuh = tetap ambigu saja.
+  Future<void> _handleReturn() async {
+    final awaySince = _awaySince;
+    _awaySince = null;
+    final confirmedExit = _userExitConfirmed;
+    _userExitConfirmed = false;
+    if (awaySince == null ||
+        _departureReported ||
+        _reporting ||
+        _ending ||
+        !widget.attemptActive ||
+        _violationCount >= AttemptStateMachine.initialViolationLimit) {
+      return;
+    }
+    final unpinned = await _isUnpinned();
+    if (!confirmedExit &&
+        !unpinned &&
+        _now().difference(awaySince) < widget.departureGrace) {
+      return;
+    }
+    _reporting = true;
+    try {
+      final ViolationResultMsg result;
+      if (unpinned && widget.registerSevereViolation != null) {
+        result = await widget.registerSevereViolation!(_severeTrigger);
+      } else {
+        result = await widget.registerViolation(_countedTrigger);
+      }
+      _departureReported = true;
+      // Bunyikan peringatan native untuk setiap hitungan baru (FR10),
+      // tanpa memblokir transisi UI dan tanpa menggagalkan apa pun bila
+      // perangkat tidak mendukungnya.
+      unawaited(_alertWarning());
+      if (!mounted) return;
+      if (result.outcome == ViolationOutcome.locked) {
+        // State locked sudah dipersist controller; serahkan ke induk agar
+        // layar terkunci tampil. Dialog yang sedang terbuka tidak boleh
+        // membatalkannya (tabel state PRD).
+        await widget.onViolationLock();
+      } else {
+        setState(() {
+          _violationCount = result.violationCount;
+          _violationReason = result.reason;
+          _warningAcknowledged = false;
+        });
+      }
+    } on StateError {
+      // Balapan dengan transisi induk (mis. attempt sudah berakhir/
+      // terkunci lebih dulu): bukan pelanggaran baru, abaikan.
+      _departureReported = true;
+    } finally {
+      _reporting = false;
     }
   }
 
   bool get _showWarning =>
       _violationCount > 0 && _violationCount < 3 && !_warningAcknowledged;
+
+  /// True bila pin layar dipastikan sudah lepas (matriks v3). Fail-open:
+  /// tanpa callback atau bila query gagal, dianggap pin masih utuh agar
+  /// gangguan bridge tidak berubah menjadi vonis pelanggaran.
+  Future<bool> _isUnpinned() async {
+    final query = widget.isScreenPinned;
+    if (query == null) return false;
+    try {
+      return !await query();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Pemicu peringatan native best-effort. Tidak pernah melempar ke
+  /// pemanggil; kegagalan perangkat berarti peringatan visual saja yang
+  /// tampil (FR10: visual selalu tersedia).
+  Future<void> _alertWarning() async {
+    try {
+      await widget.onWarningAlert?.call();
+    } catch (_) {
+      // Abaikan: peringatan visual tetap menjadi jalur utama.
+    }
+  }
 
   Future<void> _requestCompletion() async {
     if (_ending) return;
@@ -179,7 +356,6 @@ class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
                   _Header(
                     session: widget.session,
                     violationCount: _violationCount,
-                    onOpenTeacherMode: widget.onOpenTeacherMode,
                   ),
                   if (_notice != null)
                     MaterialBanner(
@@ -232,15 +408,10 @@ class _ExamScreenState extends State<ExamScreen> with WidgetsBindingObserver {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({
-    required this.session,
-    required this.violationCount,
-    this.onOpenTeacherMode,
-  });
+  const _Header({required this.session, required this.violationCount});
 
   final ExamSession session;
   final int violationCount;
-  final VoidCallback? onOpenTeacherMode;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -265,12 +436,6 @@ class _Header extends StatelessWidget {
               'Pelanggaran: $violationCount',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
-            if (onOpenTeacherMode != null)
-              IconButton(
-                onPressed: onOpenTeacherMode,
-                tooltip: 'Mode Guru',
-                icon: const Icon(Icons.admin_panel_settings_outlined),
-              ),
           ],
         ),
         const SizedBox(height: 6),

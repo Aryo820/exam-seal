@@ -1,7 +1,7 @@
 # examseal
 
-ExamSeal menyimpan sesi, PIN verifier, state pengamanan, dan riwayat attempt
-secara lokal di perangkat Android.
+ExamSeal menyimpan sesi, state pengamanan, dan riwayat attempt
+secara lokal di perangkat Android (tanpa PIN/secret; keputusan pengawas prosedural).
 
 ## Retensi dan batas data lokal
 

@@ -133,8 +133,11 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  /// Mode Guru dikunci selama attempt siswa menahan (tanpa PIN, kontrol
+  /// prosedural): satu-satunya jalan adalah kembali ke ujian. Guru memakai
+  /// HP-nya sendiri untuk sesi guru.
   Future<void> _confirmTeacherMode(BuildContext context) async {
-    final openTeacherMode = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => Dialog(
@@ -152,7 +155,7 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   const Expanded(
                     child: Text(
-                      'Buka mode guru?',
+                      'Mode guru terkunci',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
@@ -168,17 +171,16 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               const Text(
-                'Sesi ujian siswa masih aktif. Masuk ke mode guru tidak akan mengakhiri atau menghapus sesi ini.',
+                'Sesi ujian siswa masih berlangsung di HP ini. Selesaikan bersama pengawas terlebih dahulu.',
                 style: TextStyle(
                   fontSize: 16,
                   height: 1.5,
                   color: Color(0xFF595959),
                 ),
               ),
-              const SizedBox(height: 16),
               const SizedBox(height: 24),
               FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
+                onPressed: () => Navigator.of(dialogContext).pop(),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(56),
                   shape: RoundedRectangleBorder(
@@ -187,32 +189,14 @@ class HomeScreen extends StatelessWidget {
                 ),
                 child: const Text('Kembali ke Ujian'),
               ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(56),
-                  foregroundColor: const Color(0xFF171717),
-                  side: const BorderSide(color: Color(0xFF171717)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                child: const Text('Buka Mode Guru'),
-              ),
             ],
           ),
         ),
       ),
     );
 
-    if (!context.mounted || openTeacherMode == null) return;
-    if (!openTeacherMode) {
-      onResumeStudentSession!();
-      return;
-    }
-
-    if (context.mounted) _openTeacherMode(context);
+    if (!context.mounted) return;
+    onResumeStudentSession!();
   }
 
   void _openTeacherMode(BuildContext context) {

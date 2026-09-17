@@ -193,4 +193,19 @@ class _Protection implements ExamProtectionBridge {
     restoreCalls++;
     return true;
   }
+
+  @override
+  Future<bool> startExamGuard() async => true;
+
+  @override
+  Future<bool> stopExamGuard() async => true;
+
+  @override
+  Future<bool> requestScreenPin() async => true;
+
+  @override
+  Future<bool> stopScreenPin() async => true;
+
+  @override
+  Future<bool> isScreenPinned() async => true;
 }

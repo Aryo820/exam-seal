@@ -74,10 +74,25 @@ class AttemptStateMachine {
   /// palsu agar overlay muncul.
   static const Set<String> countedViolationTriggers = {'appLeftWhileActive'};
 
+  /// Pemicu pelanggaran BERAT (matriks v4): aksi sadar meloloskan diri
+  /// yang langsung mengunci ujian tanpa menunggu ambang tiga. Sengaja
+  /// dipisah dari [countedViolationTriggers] agar jalur normal tidak bisa
+  /// menghasilkan vonis berat.
+  static const Set<String> severeViolationTriggers = {'screenUnpinned'};
+
+  /// Counter minimum setelah pelanggaran berat: dilompatkan ke ambang
+  /// agar invarian "setelah dilanjutkan, pelanggaran berikutnya langsung
+  /// mengunci lagi" tetap berlaku.
+  static int severeCounterAfter(int currentCount) {
+    final next = currentCount + 1;
+    return next >= initialViolationLimit ? next : initialViolationLimit;
+  }
+
   /// Deskripsi yang dapat dibaca siswa/pengawas untuk setiap pemicu
   /// terbukti. Pemicu tanpa deskripsi memakai kode mentahnya.
   static String describeTrigger(String trigger) => switch (trigger) {
     'appLeftWhileActive' => 'Anda meninggalkan layar ujian.',
+    'screenUnpinned' => 'Anda melepas kunci layar ujian.',
     _ => trigger,
   };
 

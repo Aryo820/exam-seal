@@ -97,9 +97,21 @@ class SessionStore {
           exam_name TEXT NOT NULL,
           form_url TEXT NOT NULL,
           security_policy_version INTEGER NOT NULL DEFAULT 1,
-          created_at INTEGER NOT NULL
+          created_at INTEGER NOT NULL,
+          origin TEXT NOT NULL DEFAULT 'local'
         )
       ''');
+      // Migrasi DB lama (tanpa kolom origin): baris yang sudah ada tidak
+      // bisa dibedakan asal-usulnya sehingga ikut default 'local'. Di HP
+      // siswa, sesi hasil scan lama tetap tampil sampai retensi 7 hari
+      // menghapusnya; wipe tabel ditolak karena menghapus data guru.
+      final columns = await db.rawQuery('PRAGMA table_info(sessions)');
+      final hasOrigin = columns.any((c) => c['name'] == 'origin');
+      if (!hasOrigin) {
+        await db.execute(
+          "ALTER TABLE sessions ADD COLUMN origin TEXT NOT NULL DEFAULT 'local'",
+        );
+      }
       await db.execute('''
         CREATE TABLE IF NOT EXISTS attempts (
           attempt_id TEXT PRIMARY KEY,
@@ -170,6 +182,11 @@ class SessionStore {
   // ---- Sesi ----
 
   /// Simpan sesi (idempoten untuk sesi identik).
+  ///
+  /// Asal sesi (`local` = dibuat guru di HP ini, `scanned` = hasil scan
+  /// di HP siswa) ditulis sekali dan dipertahankan: insert memakai
+  /// `ignore` sehingga scan ulang tidak bisa mengubah origin baris yang
+  /// sudah ada. Mode Guru hanya menampilkan sesi `local`.
   Future<void> saveSession(
     ExamSession session, {
     bool fromScan = false,
@@ -207,6 +224,7 @@ class SessionStore {
         'form_url': session.formUrl.toString(),
         'security_policy_version': session.securityPolicyVersion,
         'created_at': session.createdAt.millisecondsSinceEpoch,
+        'origin': fromScan ? 'scanned' : 'local',
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
     });
   });
@@ -214,6 +232,21 @@ class SessionStore {
   Future<List<ExamSession>> listSessions() =>
       _guard('memuat daftar sesi', () async {
         final rows = await _db.query('sessions', orderBy: 'created_at DESC');
+        return rows.map(_sessionFromRow).toList();
+      });
+
+  /// Daftar sesi buatan guru lokal — satu-satunya yang boleh tampil di
+  /// Mode Guru. Sesi hasil scan (`scanned`) disembunyikan agar HP siswa
+  /// tidak bisa menampilkan QR ulang atau menghapus riwayatnya sendiri,
+  /// tetapi datanya tetap tersimpan untuk retensi dan pengulangan.
+  Future<List<ExamSession>> listLocalSessions() =>
+      _guard('memuat daftar sesi guru', () async {
+        final rows = await _db.query(
+          'sessions',
+          where: 'origin = ?',
+          whereArgs: const ['local'],
+          orderBy: 'created_at DESC',
+        );
         return rows.map(_sessionFromRow).toList();
       });
 
@@ -410,6 +443,38 @@ class SessionStore {
     });
     return attemptId;
   });
+
+  /// Hapus attempt yatim beserta event, aksi pengawas, dan status
+  /// proteksinya dalam satu transaksi. Dipakai saat mulai ujian gagal
+  /// SETELAH attempt persist (mis. kunci layar ditolak): tanpa ini ada
+  /// attempt aktif yang menahan tanpa jalan keluar yang sah. Hanya untuk
+  /// attempt yang belum memiliki event/aksi bermakna; riwayat attempt
+  /// berakhir tidak pernah dihapus lewat sini (pakai retensi).
+  Future<void> deleteAttempt(String attemptId) =>
+      _guard('menghapus attempt yang gagal dimulai', () async {
+        await _db.transaction((txn) async {
+          await txn.delete(
+            'session_events',
+            where: 'attempt_id = ?',
+            whereArgs: [attemptId],
+          );
+          await txn.delete(
+            'supervisor_actions',
+            where: 'attempt_id = ?',
+            whereArgs: [attemptId],
+          );
+          await txn.delete(
+            'protection_states',
+            where: 'attempt_id = ?',
+            whereArgs: [attemptId],
+          );
+          await txn.delete(
+            'attempts',
+            where: 'attempt_id = ?',
+            whereArgs: [attemptId],
+          );
+        });
+      });
 
   /// Attempt "saat ini" yang menahan mode siswa: aktif, terkunci, atau
   /// menunggu pemulihan. Attempt berakhir bukan penahan; pengulangan

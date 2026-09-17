@@ -1,89 +1,160 @@
 package com.example.examseal
 
-import android.app.NotificationManager
-import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
-import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * Bridge proteksi ExamSeal. Satu MethodChannel `examseal/protection`:
- * - checkStatus: dukungan + FLAG_SECURE + akses Notification Policy,
- * - activate: FLAG_SECURE + filter notifikasi DND milik aplikasi,
- * - restore/deactivate: lepaskan FLAG_SECURE + pulihkan pengaturan,
- * - openNotificationPolicySettings: buka pengaturan atas aksi eksplisit.
+ * Activity ExamSeal — disengaja tipis.
  *
- * Klaim dibatasi pada kemampuan yang benar-benar tersedia di perangkat:
- * tidak mengklaim panel notifikasi pasti tidak dapat dibuka, screenshot
- * pasti terblokir di semua HP, atau Google Forms pasti sudah submit.
- * Akses DND tidak pernah diminta/diubah otomatis saat aplikasi dibuka.
+ * Tugasnya hanya:
+ * - inisialisasi manager native,
+ * - konfigurasi MethodChannel `examseal/protection` dan EventChannel
+ *   `examseal/exam_guard_events`,
+ * - meneruskan panggilan Flutter ke manager yang tepat,
+ * - meneruskan window focus ke [ExamLifecycleObserver],
+ * - membersihkan resource saat dihancurkan.
+ *
+ * TIDAK ada aturan bisnis ujian di sini: tidak ada counter, tidak ada
+ * keputusan pelanggaran. Semua kebijakan milik Flutter.
+ *
+ * Kompatibilitas: metode lama (`checkStatus`, `activate`, `restore`,
+ * `deactivate`, `openNotificationPolicySettings`) berperilaku persis
+ * seperti sebelumnya.
  */
 class MainActivity : FlutterActivity() {
-    private val channelName = "examseal/protection"
-    private val protectionPreferences by lazy {
-        getSharedPreferences("examseal_protection", Context.MODE_PRIVATE)
+
+    private lateinit var secureMode: SecureModeManager
+    private lateinit var notificationGuard: NotificationGuardManager
+    private lateinit var warningManager: WarningManager
+    private lateinit var examGuard: ExamGuardManager
+    private lateinit var screenPin: ScreenPinManager
+
+    private var methodChannel: MethodChannel? = null
+    private var eventChannel: EventChannel? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        secureMode = SecureModeManager(this)
+        notificationGuard = NotificationGuardManager(this)
+        warningManager = WarningManager(this)
+        examGuard = ExamGuardManager()
+        screenPin = ScreenPinManager(this)
+        // Daftarkan observer lifecycle sekali ke Application (aman
+        // dipanggil berulang; pendaftarannya sendiri idempoten).
+        application?.let { examGuard.observer.registerOnce(it) }
     }
-
-    private val notificationManager: NotificationManager
-        get() = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-    private fun previousInterruptionFilter(): Int? =
-        if (protectionPreferences.contains("previous_interruption_filter")) {
-            protectionPreferences.getInt("previous_interruption_filter", 0)
-        } else {
-            null
-        }
-
-    private fun ownsDndChange(): Boolean =
-        protectionPreferences.getBoolean("owns_dnd_change", false)
-
-    /** Commit sinkron sebelum DND diubah, supaya crash tidak melupakan nilai pengguna. */
-    private fun prepareDndRestore(filter: Int): Boolean = protectionPreferences.edit()
-        .putInt("previous_interruption_filter", filter)
-        .putBoolean("owns_dnd_change", true)
-        .commit()
-
-    private fun clearDndRestore(): Boolean = protectionPreferences.edit().clear().commit()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
-            .setMethodCallHandler { call, result ->
-                try {
-                    when (call.method) {
-                        "checkStatus" -> result.success(checkStatus())
-                        "activate" -> {
-                            val activated = activate()
-                            result.success(activated)
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
+        methodChannel = MethodChannel(messenger, CHANNEL_METHODS)
+            .also { it.setMethodCallHandler(::handleMethodCall) }
+        eventChannel = EventChannel(messenger, CHANNEL_EVENTS)
+            .also {
+                it.setStreamHandler(
+                    object : EventChannel.StreamHandler {
+                        override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                            examGuard.attachSink(events)
                         }
-                        "restore", "deactivate" -> {
-                            val restored = restore()
-                            result.success(restored)
+
+                        override fun onCancel(arguments: Any?) {
+                            examGuard.detachSink()
                         }
-                        "openNotificationPolicySettings" -> {
-                            openNotificationPolicySettings()
-                            result.success(true)
-                        }
-                        else -> result.notImplemented()
                     }
-                } catch (e: Exception) {
-                    result.error("protection_error", e.message, null)
-                }
+                )
             }
     }
 
-    private fun isSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        // Lepas sink agar tidak ada callback ke engine yang sudah mati.
+        examGuard.detachSink()
+        methodChannel?.setMethodCallHandler(null)
+        methodChannel = null
+        eventChannel?.setStreamHandler(null)
+        eventChannel = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
 
-    private fun isNotificationPolicyAccessGranted(): Boolean =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            notificationManager.isNotificationPolicyAccessGranted
-        } else {
-            false
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (::examGuard.isInitialized) {
+            examGuard.observer.onWindowFocusChanged(hasFocus)
         }
+    }
+
+    /**
+     * Hanya dipanggil Android saat pengguna SENGAJA keluar (Home/Recent).
+     * Tidak dipanggil untuk panggilan masuk, dialog sistem/izin, maupun
+     * screen-off — diteruskan apa adanya agar Flutter bisa membedakan
+     * kepergian disengaja dari interupsi sistem (PRD FR05/Q03).
+     */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (::examGuard.isInitialized) {
+            examGuard.observer.onUserLeaveHint()
+        }
+    }
+
+    override fun onDestroy() {
+        // Pastikan tidak ada monitoring, nada, atau volume yang tertinggal.
+        if (::examGuard.isInitialized) examGuard.stop()
+        if (::warningManager.isInitialized) warningManager.release()
+        super.onDestroy()
+    }
+
+    private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            when (call.method) {
+                // ---- API lama (perilaku dipertahankan) ----
+                "checkStatus" -> result.success(checkStatus())
+                "activate" -> result.success(activate())
+                "restore", "deactivate" -> result.success(restore())
+                "openNotificationPolicySettings" -> {
+                    openNotificationPolicySettings()
+                    result.success(true)
+                }
+                // ---- Mode aman eksplisit (hanya FLAG_SECURE) ----
+                "enableSecureMode" -> result.success(secureMode.enable())
+                "disableSecureMode" -> result.success(secureMode.disable())
+                // ---- ExamGuard eksplisit (hanya monitoring) ----
+                "startExamGuard" -> result.success(examGuard.start())
+                "stopExamGuard" -> result.success(examGuard.stop())
+                "isExamGuardActive" -> result.success(examGuard.isActive())
+                // ---- Peringatan (FR10, maksimal 2000ms) ----
+                "vibrateWarning" -> {
+                    val duration = (call.argument<Number>("durationMs")?.toLong() ?: 1000L)
+                        .coerceIn(1L, WarningManager.MAX_ALERT_MS)
+                    result.success(warningManager.vibrateWarning(duration))
+                }
+                "playWarningSound" -> {
+                    val duration = (call.argument<Number>("durationMs")?.toLong() ?: 2000L)
+                        .coerceIn(1L, WarningManager.MAX_ALERT_MS)
+                    result.success(warningManager.playWarningSound(duration))
+                }
+                "stopWarningSound" -> result.success(warningManager.stopWarningSound())
+                "isWarningSounding" -> result.success(warningManager.isSounding())
+                // ---- Kunci layar / screen pinning (tanpa device owner) ----
+                // requestScreenPin hanya berarti permintaan terkirim;
+                // Flutter wajib verifikasi lewat isScreenPinned (polling)
+                // karena dialog persetujuan sistem bersifat asinkron.
+                "requestScreenPin" -> result.success(screenPin.requestPin())
+                "stopScreenPin" -> result.success(screenPin.stopPin())
+                "isScreenPinned" -> result.success(screenPin.isPinned())
+                else -> result.notImplemented()
+            }
+        } catch (e: Exception) {
+            result.error("protection_error", e.message, null)
+        }
+    }
+
+    private fun isSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
 
     private fun checkStatus(): Map<String, Any?> {
         if (!isSupported()) {
@@ -95,104 +166,44 @@ class MainActivity : FlutterActivity() {
                 "error" to "Proteksi ExamSeal membutuhkan Android 7.0 (API 24) ke atas."
             )
         }
-        val accessGranted = isNotificationPolicyAccessGranted()
-        val secureActive =
-            window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
-        val dndActive = if (accessGranted) {
-            notificationManager.getCurrentInterruptionFilter() !=
-                NotificationManager.INTERRUPTION_FILTER_ALL
-        } else {
-            false
-        }
         return mapOf(
             "supported" to true,
-            "secureWindowActive" to secureActive,
-            "notificationAccessGranted" to accessGranted,
-            "notificationProtectionActive" to dndActive,
+            "secureWindowActive" to secureMode.isActive(),
+            "notificationAccessGranted" to notificationGuard.isAccessGranted(),
+            "notificationProtectionActive" to notificationGuard.isProtectionActive(),
             "error" to null
         )
     }
 
     /**
-     * Aktifkan proteksi: FLAG_SECURE + kontribusi DND sesuai aturan milik
-     * aplikasi. Mengembalikan false bila akses Notification Policy belum
-     * diberikan — readiness harus gagal dan tombol mulai tetap nonaktif.
-     * Pengaturan sebelumnya dicommit sebelum filter diubah, sehingga crash
-     * tidak menghilangkan data pemulihan.
+     * Perilaku persis seperti sebelumnya: FLAG_SECURE + kontribusi DND
+     * milik aplikasi, terverifikasi. False bila akses Notification Policy
+     * belum diberikan — readiness harus gagal dan tombol mulai nonaktif.
      */
     private fun activate(): Boolean {
-        if (!isSupported() || !isNotificationPolicyAccessGranted()) {
+        if (!isSupported() || !notificationGuard.isAccessGranted()) {
             return false
         }
-        val currentFilter = notificationManager.getCurrentInterruptionFilter()
-        // Pada target API 35+, perubahan DND aplikasi berkontribusi lewat
-        // aturan milik aplikasi; filter langsung hanya untuk perangkat
-        // lebih lama yang masih mengizinkannya.
-        if (currentFilter == NotificationManager.INTERRUPTION_FILTER_ALL) {
-            if (!prepareDndRestore(currentFilter)) {
-                return false
-            }
-            try {
-                notificationManager.setInterruptionFilter(
-                    NotificationManager.INTERRUPTION_FILTER_PRIORITY
-                )
-                if (notificationManager.getCurrentInterruptionFilter() ==
-                    NotificationManager.INTERRUPTION_FILTER_ALL
-                ) {
-                    clearDndRestore()
-                    return false
-                }
-            } catch (_: SecurityException) {
-                if (notificationManager.getCurrentInterruptionFilter() == currentFilter) {
-                    clearDndRestore()
-                }
-                return false
-            } catch (_: RuntimeException) {
-                if (notificationManager.getCurrentInterruptionFilter() == currentFilter) {
-                    clearDndRestore()
-                }
-                return false
-            }
+        if (!notificationGuard.activate()) {
+            return false
         }
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        return window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0 &&
-            notificationManager.getCurrentInterruptionFilter() !=
-                NotificationManager.INTERRUPTION_FILTER_ALL
+        if (!secureMode.enable()) {
+            notificationGuard.restore()
+            return false
+        }
+        val verified = secureMode.isActive() && notificationGuard.isProtectionActive()
+        if (!verified) restore()
+        return verified
     }
 
     /**
-     * Lepas FLAG_SECURE dan pulihkan pengaturan notifikasi yang diubah
-     * aplikasi. Hanya mengembalikan nilai yang benar-benar dipulihkan;
-     * kegagalan mengembalikan false agar UI menyediakan retry dan tidak
-     * mengaku sudah dipulihkan.
+     * Perilaku persis seperti sebelumnya: lepas FLAG_SECURE dan pulihkan
+     * pengaturan notifikasi yang diubah aplikasi.
      */
     private fun restore(): Boolean {
-        var restored = true
-        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        if (window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0) {
-            restored = false
-        }
-
-        val previous = previousInterruptionFilter()
-        if (previous != null && ownsDndChange()) {
-            try {
-                // Bila filter telah berubah ke nilai lain, hormati perubahan
-                // pengguna/aplikasi lain dan jangan menimpanya.
-                if (notificationManager.getCurrentInterruptionFilter() ==
-                    NotificationManager.INTERRUPTION_FILTER_PRIORITY
-                ) {
-                    notificationManager.setInterruptionFilter(previous)
-                    if (notificationManager.getCurrentInterruptionFilter() != previous) {
-                        restored = false
-                    }
-                }
-            } catch (_: SecurityException) {
-                restored = false
-            } catch (_: RuntimeException) {
-                restored = false
-            }
-        }
-        return restored && clearDndRestore()
+        val secureRestored = secureMode.disable()
+        val dndRestored = notificationGuard.restore()
+        return secureRestored && dndRestored
     }
 
     /** Buka pengaturan akses Notification Policy atas aksi eksplisit. */
@@ -204,9 +215,11 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        // FLAG_SECURE dipertahankan saat attempt berlangsung; status
-        // dibaca ulang oleh Flutter saat resume.
+    companion object {
+        /** MethodChannel lama — dipertahankan agar Dart + test lama kompatibel. */
+        const val CHANNEL_METHODS = "examseal/protection"
+
+        /** EventChannel baru untuk sinyal native → Flutter. */
+        const val CHANNEL_EVENTS = "examseal/exam_guard_events"
     }
 }

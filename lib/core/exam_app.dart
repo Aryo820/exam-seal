@@ -49,19 +49,66 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
   bool _retryingRecovery = false;
   String? _bootRecoveryError;
 
+  /// Langganan sinyal ExamGuard native, satu untuk seumur aplikasi.
+  /// Handler mengabaikan event bila tidak ada attempt yang menahan,
+  /// sehingga tidak ada kebocoran perilaku di luar ujian.
+  StreamSubscription<GuardEvent>? _guardSubscription;
+
+  /// Penghitung sinyal keluar-disengaja native (onUserLeaveHint).
+  /// Diteruskan ke ExamScreen sebagai satu-satunya pintu hitung, sehingga
+  /// satu kepergian tidak pernah dihitung dua kali (native + Dart).
+  final _nativeExitSignal = ValueNotifier<int>(0);
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _subscribeGuardEvents();
     unawaited(_boot());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_guardSubscription?.cancel());
+    _nativeExitSignal.dispose();
     _protectionNotice.dispose();
     _attemptView.dispose();
     super.dispose();
+  }
+
+  /// Dengarkan sinyal mentah ExamGuard. Setiap event HANYA dicatat
+  /// sebagai event ambigu (FR05) — tidak pernah menambah counter.
+  /// Penghitung tetap matriks Flutter di ExamScreen agar satu kepergian
+  /// tidak dihitung dua kali (native + Dart).
+  void _subscribeGuardEvents() {
+    final protection = controller.protection;
+    if (protection is! ExamProtection) return;
+    _guardSubscription = protection.guardEvents().listen(
+      (event) => unawaited(_recordNativeSignal(event)),
+      onError: (_) {},
+    );
+  }
+
+  Future<void> _recordNativeSignal(GuardEvent event) async {
+    final current = _current;
+    if (current == null ||
+        (current.state != AttemptState.active &&
+            current.state != AttemptState.locked)) {
+      return;
+    }
+    try {
+      await controller.recordAmbiguousEvent('native:${event.type}');
+    } catch (_) {
+      // Pencatatan ambigu tidak boleh mengganggu ujian berjalan.
+    }
+    // Sinyal keluar-disengaja (tombol Home/Recent, bukan panggilan atau
+    // dialog) diteruskan sebagai angka ke ExamScreen. Titik hitung tetap
+    // satu (di _handleReturn) sehingga tidak ada hitungan ganda.
+    if (event.type == 'userInitiatedExit' &&
+        current.state == AttemptState.active) {
+      _nativeExitSignal.value++;
+    }
   }
 
   /// Boot: retensi → pemulihan proteksi tertunda → attempt tersimpan →
@@ -362,6 +409,9 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       protectionNotice: _protectionNotice,
       violationCount: current.violationCount,
       violationReason: current.violationReason,
+      attemptActive: current.state == AttemptState.active,
+      userExitSignal: _nativeExitSignal,
+      isScreenPinned: _queryScreenPinned,
       registerViolation: (trigger) async {
         final result = await controller.registerViolation(trigger);
         return ViolationResultMsg(
@@ -370,15 +420,55 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
           reason: result.reason,
         );
       },
+      registerSevereViolation: (trigger) async {
+        final result = await controller.registerSevereViolation(trigger);
+        return ViolationResultMsg(
+          outcome: result.outcome,
+          violationCount: result.violationCount,
+          reason: result.reason,
+        );
+      },
       recordAmbiguousEvent: (type) => controller.recordAmbiguousEvent(type),
       onViolationLock: _onViolationLock,
+      onWarningAlert: _playNativeWarningAlert,
       endAttemptWithAuthorization: () => controller.finishCurrentAttempt(
         reason: 'Diakhiri pengawas setelah pemeriksaan pengiriman jawaban.',
       ),
       retryRestoreSettings: controller.retryRestoreSettings,
       onReturnHome: _goHome,
-      onOpenTeacherMode: () => unawaited(_openTeacherMode()),
     );
+  }
+
+  /// Tanya status pin ke bridge native. Fail-open (true) untuk bridge
+  /// non-native (test/widget) dan saat query gagal: gangguan bridge tidak
+  /// boleh berubah menjadi vonis unpin.
+  Future<bool> _queryScreenPinned() async {
+    final protection = controller.protection;
+    if (protection is! ExamProtection) return true;
+    try {
+      return await protection.isScreenPinned();
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Peringatan native per hitungan baru (FR10: getar + bunyi singkat,
+  /// masing-masing maksimal dua detik). Best-effort penuh: perangkat yang
+  /// tidak mendukung tetap menampilkan peringatan visual; kegagalan tidak
+  /// pernah melempar ke UI.
+  Future<void> _playNativeWarningAlert() async {
+    final protection = controller.protection;
+    if (protection is! ExamProtection) return;
+    try {
+      await protection.vibrateWarning(durationMs: 1000);
+    } catch (_) {
+      // Abaikan: lanjut ke bunyi, lalu selesai diam-diam.
+    }
+    try {
+      await protection.playWarningSound(durationMs: ExamProtection.maxAlertMs);
+    } catch (_) {
+      // Abaikan: visual tetap menjadi jalur utama (FR10).
+    }
   }
 
   Future<void> _onViolationLock() async {
@@ -399,7 +489,6 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       violationCount: current.violationCount,
       violationReason: AttemptStateMachine.describeTrigger(rawReason),
       onContinueExam: _continueProtectedAttempt,
-      onOpenTeacherMode: _openTeacherMode,
       onEndExam: () async {
         final restored = await controller.finishCurrentAttempt(
           reason: 'Diakhiri pengawas dari ujian terkunci.',
@@ -419,7 +508,6 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       session: session,
       violationCount: current.violationCount,
       onContinueExam: _continueProtectedAttempt,
-      onOpenTeacherMode: _openTeacherMode,
       onEndExam: () async {
         final restored = await controller.finishCurrentAttempt(
           reason: 'Diakhiri pengawas setelah pemulihan aplikasi.',

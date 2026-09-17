@@ -258,6 +258,11 @@ class _PreExamScreenState extends State<PreExamScreen>
               text:
                   'Panggilan masuk dan jaringan putus tidak otomatis dihitung sebagai pelanggaran.',
             ),
+            const _Rule(
+              number: '5',
+              text:
+                  'Saat mulai, layar dikunci dan muncul dialog sistem yang harus disetujui. Penolakan berarti ujian tidak dapat dimulai. Melepas kunci secara paksa langsung mengunci ujian tanpa peringatan.',
+            ),
             const SizedBox(height: 32),
             FilledButton(
               onPressed: allReady && !_starting ? _start : null,
@@ -289,7 +294,7 @@ class _PreExamScreenState extends State<PreExamScreen>
             ],
             const SizedBox(height: 12),
             const Text(
-              'DND dan FLAG_SECURE tidak menjamin panel sistem tertutup pada semua HP. Perangkat yang belum terbukti harus memakai ujian alternatif.',
+              'Selama ujian, bilah notifikasi dan navigasi keluar dikunci sistem. Perangkat yang belum terbukti mendukung penguncian harus memakai ujian alternatif.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/exam_sessions.dart';
 
-enum SupervisorDecision { continueExam, endExam, openTeacherMode }
+enum SupervisorDecision { continueExam, endExam }
 
 /// Stitch S07 - Keputusan Pengawas.
 class SupervisorDecisionScreen extends StatelessWidget {
@@ -189,28 +189,6 @@ class SupervisorDecisionScreen extends StatelessWidget {
                       icon: const Icon(Icons.play_arrow),
                       label: const Text(
                         'Lanjutkan Ujian',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.of(
-                        context,
-                      ).pop(SupervisorDecision.openTeacherMode),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(56),
-                        foregroundColor: const Color(0xFF171717),
-                        side: const BorderSide(color: Color(0xFF171717)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      icon: const Icon(Icons.admin_panel_settings_outlined),
-                      label: const Text(
-                        'Buka Mode Guru',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,

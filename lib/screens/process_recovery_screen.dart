@@ -10,7 +10,6 @@ class ProcessRecoveryScreen extends StatefulWidget {
     required this.violationCount,
     required this.onContinueExam,
     required this.onEndExam,
-    this.onOpenTeacherMode,
     super.key,
   }) : assert(violationCount >= 0);
 
@@ -18,7 +17,6 @@ class ProcessRecoveryScreen extends StatefulWidget {
   final int violationCount;
   final VoidCallback onContinueExam;
   final VoidCallback onEndExam;
-  final Future<void> Function()? onOpenTeacherMode;
 
   @override
   State<ProcessRecoveryScreen> createState() => _ProcessRecoveryScreenState();
@@ -44,8 +42,6 @@ class _ProcessRecoveryScreenState extends State<ProcessRecoveryScreen> {
       widget.onContinueExam();
     } else if (decision == SupervisorDecision.endExam) {
       widget.onEndExam();
-    } else if (decision == SupervisorDecision.openTeacherMode) {
-      await widget.onOpenTeacherMode?.call();
     }
   }
 

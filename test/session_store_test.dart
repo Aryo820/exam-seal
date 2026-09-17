@@ -488,4 +488,72 @@ void main() {
     expect(await store.loadSession(session.sessionId), isNotNull);
     expect(await store.loadPreparedProtectionSessionId(), session.sessionId);
   });
+
+  test('daftar guru hanya menampilkan sesi buatan lokal', () async {
+    final store = await newStore();
+    await store.saveSession(session);
+    final scanned = ExamSession(
+      schemaVersion: 2,
+      sessionId: 'session-2',
+      sessionCode: 'BIO-3X8Q',
+      examName: 'Biologi Kelas X',
+      formUrl: Uri.parse('https://forms.gle/contoh'),
+      createdAt: DateTime.utc(2026, 9, 14, 8),
+    );
+    await store.saveSession(scanned, fromScan: true);
+
+    expect(await store.listSessions(), hasLength(2));
+    final local = await store.listLocalSessions();
+    expect(local, hasLength(1));
+    expect(local.single.sessionId, 'session-1');
+    // Scan ulang sesi identik tidak mengubah origin.
+    await store.saveSession(scanned, fromScan: true);
+    expect(await store.listLocalSessions(), hasLength(1));
+    // Keterkaitan attempt tetap bisa memuat sesi hasil scan.
+    expect(
+      (await store.loadSession('session-2'))!.sessionId,
+      'session-2',
+    );
+  });
+
+  test('migrasi menambah origin pada database lama', () async {
+    final db = await factory.openDatabase(inMemoryDatabasePath);
+    openDbs.add(db);
+    await db.execute('''
+      CREATE TABLE sessions (
+        session_id TEXT PRIMARY KEY,
+        schema_version INTEGER NOT NULL,
+        session_code TEXT NOT NULL,
+        exam_name TEXT NOT NULL,
+        form_url TEXT NOT NULL,
+        security_policy_version INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+    await db.insert('sessions', {
+      'session_id': 'legacy-1',
+      'schema_version': 2,
+      'session_code': 'MTK-7K2P',
+      'exam_name': 'Matematika Kelas XI',
+      'form_url': 'https://docs.google.com/forms/d/e/abc/viewform',
+      'security_policy_version': 1,
+      'created_at': DateTime.utc(2026, 9, 13, 8).millisecondsSinceEpoch,
+    });
+
+    final store = await SessionStore.open(db);
+
+    // Baris lama ikut default local; baris baru tercatat sesuai asal.
+    expect(await store.listLocalSessions(), hasLength(1));
+    final scanned = ExamSession(
+      schemaVersion: 2,
+      sessionId: 'session-2',
+      sessionCode: 'BIO-3X8Q',
+      examName: 'Biologi Kelas X',
+      formUrl: Uri.parse('https://forms.gle/contoh'),
+      createdAt: DateTime.utc(2026, 9, 14, 8),
+    );
+    await store.saveSession(scanned, fromScan: true);
+    expect(await store.listSessions(), hasLength(2));
+    expect(await store.listLocalSessions(), hasLength(1));
+  });
 }

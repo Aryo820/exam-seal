@@ -40,7 +40,9 @@ void main() {
       expect(results.every((r) => r.route == ScanImportRoute.preExam), isTrue);
       expect(await store.listSessions(), hasLength(1));
       expect(await store.loadCurrentAttempt(), isNull);
-      expect(await app.listTeacherSessions(), hasLength(1));
+      // Sesi hasil scan tersimpan untuk keterkaitan attempt, tetapi
+      // disembunyikan dari Mode Guru (anti intip QR/hapus riwayat).
+      expect(await app.listTeacherSessions(), isEmpty);
       final ready = await app.assessReadiness(scanned);
       expect(ready.qrValid && ready.urlValid && ready.storageWritable, isTrue);
       expect(ready.allMandatoryPassed, isFalse);

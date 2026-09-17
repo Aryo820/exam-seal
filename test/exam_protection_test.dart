@@ -73,6 +73,99 @@ void main() {
 
     expect(await ExamProtection().restore(), isFalse);
   });
+
+  test('exam guard start/stop diteruskan ke native apa adanya', () async {
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call.method);
+          return true;
+        });
+    final protection = ExamProtection();
+
+    expect(await protection.startExamGuard(), isTrue);
+    expect(await protection.stopExamGuard(), isTrue);
+    expect(await protection.isExamGuardActive(), isTrue);
+    expect(calls, ['startExamGuard', 'stopExamGuard', 'isExamGuardActive']);
+  });
+
+  test('peringatan native dijepit ke batas FR10 dan gagal dengan aman', () async {
+    Object? lastArgs;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'vibrateWarning' ||
+              call.method == 'playWarningSound') {
+            lastArgs = call.arguments;
+            return true;
+          }
+          if (call.method == 'stopWarningSound') return true;
+          fail('Panggilan tak terduga: ${call.method}');
+        });
+    final protection = ExamProtection();
+
+    // Melebihi 2000ms harus dijepit, bukan diteruskan mentah.
+    expect(await protection.vibrateWarning(durationMs: 5000), isTrue);
+    expect((lastArgs as Map)['durationMs'], ExamProtection.maxAlertMs);
+    expect(await protection.playWarningSound(durationMs: 5000), isTrue);
+    expect((lastArgs as Map)['durationMs'], ExamProtection.maxAlertMs);
+    expect(await protection.stopWarningSound(), isTrue);
+  });
+
+  test('peringatan native false bila bridge tidak tersedia', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async => null);
+    final protection = ExamProtection();
+
+    expect(await protection.startExamGuard(), isFalse);
+    expect(await protection.vibrateWarning(), isFalse);
+    expect(await protection.playWarningSound(), isFalse);
+  });
+
+  test('screen pin diteruskan ke native apa adanya', () async {
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call.method);
+          return true;
+        });
+    final protection = ExamProtection();
+
+    expect(await protection.requestScreenPin(), isTrue);
+    expect(await protection.stopScreenPin(), isTrue);
+    expect(await protection.isScreenPinned(), isTrue);
+    expect(calls, ['requestScreenPin', 'stopScreenPin', 'isScreenPinned']);
+  });
+
+  test('screen pin false bila bridge tidak tersedia', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async => null);
+    final protection = ExamProtection();
+
+    expect(await protection.requestScreenPin(), isFalse);
+    expect(await protection.stopScreenPin(), isFalse);
+    expect(await protection.isScreenPinned(), isFalse);
+  });
+
+  test('GuardEvent hanya menerima payload event yang dikenal', () {
+    final valid = GuardEvent.fromMap({
+      'type': 'appBackgrounded',
+      'atMillis': 123,
+      'detail': 'activity paused',
+    });
+    expect(valid, isNotNull);
+    expect(valid!.type, 'appBackgrounded');
+    expect(valid.atMillis, 123);
+    expect(valid.detail, 'activity paused');
+
+    expect(GuardEvent.fromMap(null), isNull);
+    expect(GuardEvent.fromMap('bukan map'), isNull);
+    expect(GuardEvent.fromMap({'type': '', 'atMillis': 1}), isNull);
+    expect(GuardEvent.fromMap({'type': 'x'}), isNull);
+    expect(
+      GuardEvent.fromMap({'type': 'x', 'atMillis': 'bukan int'}),
+      isNull,
+    );
+  });
 }
 
 Map<String, Object?> _status({required bool secure, required bool dnd}) => {

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('active student session opens teacher mode without PIN', (
+  testWidgets('active student session blocks teacher mode without PIN', (
     tester,
   ) async {
     var resumed = false;
@@ -20,17 +20,13 @@ void main() {
 
     await tester.tap(find.text('Guru'));
     await tester.pumpAndSettle();
-    expect(find.text('Buka mode guru?'), findsOneWidget);
+    expect(find.text('Mode guru terkunci'), findsOneWidget);
     expect(find.textContaining('PIN'), findsNothing);
+    expect(find.text('Buka Mode Guru'), findsNothing);
 
     await tester.tap(find.text('Kembali ke Ujian'));
     await tester.pumpAndSettle();
     expect(resumed, isTrue);
-
-    await tester.tap(find.text('Guru'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Buka Mode Guru'));
-    await tester.pumpAndSettle();
-    expect(teacherModeOpened, isTrue);
+    expect(teacherModeOpened, isFalse);
   });
 }
