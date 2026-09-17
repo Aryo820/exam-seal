@@ -52,7 +52,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     if (createSession == null) {
       setState(
         () => _saveError =
-            'Penyimpanan sesi belum tersedia. Sesi dan PIN belum dibuat.',
+            'Penyimpanan sesi belum tersedia. QR belum dapat dibuat.',
       );
       return;
     }
@@ -125,7 +125,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Daftarkan Google Forms untuk menyiapkan sesi lokal, kode sesi, dan PIN pengawas lima digit.',
+                  'Masukkan Google Forms untuk langsung membuat QR ujian.',
                   style: TextStyle(
                     fontSize: 16,
                     height: 1.5,
@@ -198,26 +198,13 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'Validasi link bukan bukti Form siap. Guru tetap harus menguji alur lengkap sampai submit sebelum QR dibagikan.',
+                        'Periksa link sebelum dibagikan. QR akan langsung dibuat setelah sesi disimpan.',
                         style: TextStyle(fontSize: 14, height: 1.5),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.lock_outline, size: 20),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Proteksi ujian dan ambang penguncian 3 pelanggaran selalu aktif dan tidak dapat diubah.',
-                        style: TextStyle(fontSize: 14, height: 1.5),
-                      ),
-                    ),
-                  ],
-                ),
                 if (_saveError != null) ...[
                   const SizedBox(height: 20),
                   Semantics(
@@ -250,7 +237,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                           ),
                         )
                       : const Text(
-                          'Buat Sesi',
+                          'Buat QR Ujian',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,

@@ -1,6 +1,7 @@
 import '../models/exam_sessions.dart';
 
-/// State eksplisit attempt ujian lokal. Dialog PIN dan overlay peringatan
+/// State eksplisit attempt ujian lokal. Dialog keputusan pengawas dan overlay
+/// peringatan
 /// adalah lapisan UI di atas state ini; mereka tidak dapat mengubah atau
 /// menyimpan state lama (PRD ExamSeal, "Alur state yang harus konsisten").
 enum AttemptState { preExam, active, locked, recoveryPending, ended }
@@ -24,7 +25,7 @@ enum OperationalEvent {
 /// - pelanggaran ketiga mengunci;
 /// - setelah Lanjutkan dari terkunci, pelanggaran berikutnya langsung
 ///   mengunci kembali (tidak ada tiga kesempatan baru);
-/// - attempt berakhir hanya dapat diulang setelah PIN pengawas benar.
+/// - attempt berakhir hanya dapat diulang setelah konfirmasi pengawas.
 class AttemptStateMachine {
   AttemptStateMachine({required this.initialViolationCount})
     : violationCount = initialViolationCount,
@@ -71,18 +72,16 @@ class AttemptStateMachine {
   /// yang benar-benar dapat dibuktikan pada perangkat uji yang masuk;
   /// ini satu-satunya tempat pemicu dihitung, jangan tambahkan pemicu
   /// palsu agar overlay muncul.
-  static const Set<String> countedViolationTriggers = {
-    'appLeftWhileActive',
-  };
+  static const Set<String> countedViolationTriggers = {'appLeftWhileActive'};
 
   /// Deskripsi yang dapat dibaca siswa/pengawas untuk setiap pemicu
   /// terbukti. Pemicu tanpa deskripsi memakai kode mentahnya.
   static String describeTrigger(String trigger) => switch (trigger) {
-        'appLeftWhileActive' => 'Anda meninggalkan layar ujian.',
-        _ => trigger,
-      };
+    'appLeftWhileActive' => 'Anda meninggalkan layar ujian.',
+    _ => trigger,
+  };
 
-  /// Mulai attempt pertama: hanya dari preExam, tanpa PIN siswa.
+  /// Mulai attempt pertama: hanya dari preExam.
   bool start() {
     if (_state != AttemptState.preExam) return false;
     _state = AttemptState.active;
@@ -133,7 +132,8 @@ class AttemptStateMachine {
   /// Pengawas melanjutkan attempt terkunci/pemulihan: sesi sama,
   /// counter dan riwayat tetap.
   bool continueBySupervisor() {
-    if (_state != AttemptState.locked && _state != AttemptState.recoveryPending) {
+    if (_state != AttemptState.locked &&
+        _state != AttemptState.recoveryPending) {
       return false;
     }
     _state = AttemptState.active;

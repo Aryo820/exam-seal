@@ -1,57 +1,29 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../models/exam_sessions.dart';
-import 'supervisor_pin_screen.dart';
 
 /// Stitch S11 - Pengulangan sesi yang telah berakhir.
 class RepeatSessionScreen extends StatefulWidget {
   const RepeatSessionScreen({
     required this.session,
     required this.previousViolationCount,
-    required this.verifySupervisorPin,
     required this.onRepeatApproved,
-    this.onAuthorizationCancelled,
     super.key,
   }) : assert(previousViolationCount >= 0);
 
   final ExamSession session;
   final int previousViolationCount;
-  final FutureOr<bool> Function(String pin) verifySupervisorPin;
 
-  /// Dipanggil setelah PIN benar dan pengawas mengonfirmasi attempt baru;
-  /// composition root memulai attempt (readiness dicek ulang).
+  /// Dipanggil setelah pengawas mengonfirmasi attempt baru; composition root
+  /// memulai attempt (readiness dicek ulang).
   final Future<void> Function() onRepeatApproved;
-  final VoidCallback? onAuthorizationCancelled;
 
   @override
   State<RepeatSessionScreen> createState() => _RepeatSessionScreenState();
 }
 
 class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
-  int _failedPinAttempts = 0;
-  DateTime? _pinLockedUntil;
-
   Future<void> _requestNewAttempt() async {
-    final verified = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => SupervisorPinScreen(
-          heading: 'Izinkan pengulangan sesi',
-          description:
-              'Pengawas memasukkan PIN lima digit untuk membuka konfirmasi attempt baru.',
-          verifyPin: widget.verifySupervisorPin,
-          initialFailedAttempts: _failedPinAttempts,
-          initialLockedUntil: _pinLockedUntil,
-          onAttemptStateChanged: (attempts, lockedUntil) {
-            _failedPinAttempts = attempts;
-            _pinLockedUntil = lockedUntil;
-          },
-        ),
-      ),
-    );
-    if (verified != true || !mounted) return;
-
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -74,10 +46,7 @@ class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
         ],
       ),
     );
-    if (confirmed != true) {
-      widget.onAuthorizationCancelled?.call();
-      return;
-    }
+    if (confirmed != true) return;
     if (mounted) {
       Navigator.of(context).pop(true);
       await widget.onRepeatApproved();
@@ -188,7 +157,7 @@ class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'Setelah PIN benar, pengawas masih harus mengonfirmasi pembuatan attempt baru. Counter baru dimulai dari 0 tanpa mengubah riwayat lama.',
+                    'Pengawas perlu mengonfirmasi pembuatan attempt baru. Counter baru dimulai dari 0 tanpa mengubah riwayat lama.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.5,
@@ -205,9 +174,9 @@ class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    icon: const Icon(Icons.lock_outline, size: 20),
+                    icon: const Icon(Icons.replay_outlined, size: 20),
                     label: const Text(
-                      'PIN Pengawas',
+                      'Buat Attempt Baru',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,

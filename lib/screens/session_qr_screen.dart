@@ -1,28 +1,17 @@
-import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/exam_sessions.dart';
 import '../services/qr_codec.dart';
-import 'supervisor_pin_access_screen.dart';
 
 /// Stitch T04 - QR publik untuk sesi yang telah lolos pemeriksaan guru.
 class SessionQrScreen extends StatefulWidget {
-  const SessionQrScreen({
-    required this.session,
-    this.shareQr,
-    this.onOpenSupervisorPin,
-    this.authenticateSupervisor,
-    this.readSupervisorPin,
-    super.key,
-  });
+  const SessionQrScreen({required this.session, super.key});
 
   final ExamSession session;
-  final FutureOr<bool> Function(String payload)? shareQr;
-  final VoidCallback? onOpenSupervisorPin;
-  final FutureOr<bool> Function()? authenticateSupervisor;
-  final FutureOr<String?> Function()? readSupervisorPin;
 
   @override
   State<SessionQrScreen> createState() => _SessionQrScreenState();
@@ -32,22 +21,28 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
   bool _sharing = false;
   String? _shareError;
 
-  Future<void> _share(String payload) async {
+  Future<bool> _shareWithSystem(Uint8List png) async {
+    final result = await SharePlus.instance.share(
+      ShareParams(
+        files: [
+          XFile.fromData(png, name: 'qr-sesi.png', mimeType: 'image/png'),
+        ],
+        subject: 'QR Sesi ${widget.session.sessionCode}',
+      ),
+    );
+    return result.status == ShareResultStatus.success;
+  }
+
+  Future<void> _share() async {
     if (_sharing) return;
-    final shareQr = widget.shareQr;
-    if (shareQr == null) {
-      setState(
-        () => _shareError =
-            'Berbagi gambar belum tersedia. QR tetap dapat dipindai dari layar ini.',
-      );
-      return;
-    }
     setState(() {
       _sharing = true;
       _shareError = null;
     });
     try {
-      final shared = await shareQr(payload);
+      final shared = await _shareWithSystem(
+        await renderSessionQrPng(widget.session),
+      );
       if (mounted && !shared) {
         setState(() => _shareError = 'Gambar QR tidak berhasil dibagikan.');
       }
@@ -57,23 +52,6 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
       }
     } finally {
       if (mounted) setState(() => _sharing = false);
-    }
-  }
-
-  void _openSupervisorPin() {
-    final callback = widget.onOpenSupervisorPin;
-    if (callback != null) {
-      callback();
-    } else {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => SupervisorPinAccessScreen(
-            session: widget.session,
-            authenticateDevice: widget.authenticateSupervisor,
-            readPin: widget.readSupervisorPin,
-          ),
-        ),
-      );
     }
   }
 
@@ -185,20 +163,6 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                   style: TextStyle(fontSize: 14, height: 1.5),
                 ),
               ),
-              const SizedBox(height: 16),
-              const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.visibility_off_outlined, size: 20),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'PIN pengawas tidak ditampilkan pada layar atau gambar QR ini. Verifikasi PIN offline lima digit adalah kontrol operasional dengan pengawas hadir; bukan bukti identitas guru atau jaminan tahan analisis aplikasi pada HP siswa.',
-                      style: TextStyle(fontSize: 14, height: 1.5),
-                    ),
-                  ),
-                ],
-              ),
               if (_shareError != null) ...[
                 const SizedBox(height: 16),
                 Semantics(
@@ -215,7 +179,7 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
               ],
               const SizedBox(height: 28),
               FilledButton.icon(
-                onPressed: _sharing ? null : () => _share(payload),
+                onPressed: _sharing ? null : _share,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(56),
                   shape: RoundedRectangleBorder(
@@ -243,12 +207,6 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                   ),
                 ),
                 child: const Text('Kembali ke Daftar Sesi'),
-              ),
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: _openSupervisorPin,
-                icon: const Icon(Icons.lock_outline, size: 18),
-                label: const Text('Akses PIN Pengawas'),
               ),
             ],
           ),

@@ -51,19 +51,19 @@ void main() {
     tester.testTextInput.hide();
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Buat Sesi'),
+      find.widgetWithText(FilledButton, 'Buat QR Ujian'),
       500,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.ensureVisible(
-      find.widgetWithText(FilledButton, 'Buat Sesi'),
+      find.widgetWithText(FilledButton, 'Buat QR Ujian'),
     );
     await tester.drag(
       find.byType(SingleChildScrollView),
       const Offset(0, -120),
     );
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Buat Sesi'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Buat QR Ujian'));
     await tester.pump();
 
     expect(
@@ -80,13 +80,15 @@ void main() {
     );
     tester.testTextInput.hide();
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Buat Sesi'));
+    await tester.ensureVisible(
+      find.widgetWithText(FilledButton, 'Buat QR Ujian'),
+    );
     await tester.drag(
       find.byType(SingleChildScrollView),
       const Offset(0, -120),
     );
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Buat Sesi'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Buat QR Ujian'));
     await tester.pumpAndSettle();
 
     expect(createdName, 'Matematika');

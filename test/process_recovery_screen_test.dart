@@ -26,7 +26,6 @@ void main() {
             ),
           ),
           violationCount: 2,
-          verifySupervisorPin: (pin) => pin == '01234',
           onContinueExam: () => continued = true,
           onEndExam: () {},
         ),
@@ -43,12 +42,9 @@ void main() {
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('PIN Pengawas').hitTestable());
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '01234');
-    tester.testTextInput.hide();
-    await tester.pump();
-    await tester.tap(find.text('Verifikasi PIN'));
+    final supervisorButton = find.text('Panggil Pengawas').hitTestable();
+    await tester.ensureVisible(supervisorButton);
+    await tester.tap(supervisorButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Menunggu pemeriksaan'), findsOneWidget);

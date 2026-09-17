@@ -11,10 +11,7 @@ void main() {
     sessionCode: 'MTH-7K2P',
     examName: 'Matematika Kelas XI',
     formUrl: Uri.parse('https://docs.google.com/forms/d/e/example/viewform'),
-    pinSalt: 'c2FsdA==',
-    pinVerifier: 'dmVyaWZpZXI=',
   );
-
   testWidgets('S04 keeps the exam visible until supervisor approval', (
     tester,
   ) async {
@@ -24,7 +21,6 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final protectionNotice = ValueNotifier<String?>(null);
     addTearDown(protectionNotice.dispose);
-
     var ended = false;
     await tester.pumpWidget(
       MaterialApp(
@@ -32,8 +28,6 @@ void main() {
           session: session(),
           violationCount: 0,
           violationReason: null,
-          verifySupervisorPin: (pin) => pin == '01234',
-          cancelEndAuthorization: () {},
           registerViolation: (trigger) async => const ViolationResultMsg(
             outcome: ViolationOutcome.warned,
             violationCount: 1,
@@ -55,7 +49,6 @@ void main() {
         ),
       ),
     );
-
     expect(find.text('Matematika Kelas XI'), findsOneWidget);
     expect(find.text('MTH-7K2P'), findsOneWidget);
     expect(find.text('Pelanggaran: 0'), findsOneWidget);
@@ -67,53 +60,35 @@ void main() {
       find.textContaining('Proteksi perangkat tidak lagi aktif'),
       findsOneWidget,
     );
-
     await tester.tap(find.text('Minta Persetujuan Selesai'));
     await tester.pumpAndSettle();
-
     expect(find.text('Tetap di tempat dan angkat tangan.'), findsOneWidget);
     expect(
       find.textContaining('ExamSeal tidak dapat memastikan'),
       findsOneWidget,
     );
     expect(ended, isFalse);
-
     await tester.tap(find.text('Kembali ke Ujian'));
     await tester.pumpAndSettle();
     expect(find.text('Google Forms'), findsOneWidget);
     expect(ended, isFalse);
-
     await tester.tap(find.text('Minta Persetujuan Selesai'));
     await tester.pumpAndSettle();
-    final pinButton = find.widgetWithText(FilledButton, 'PIN Pengawas');
+    final approveButton = find.widgetWithText(FilledButton, 'Setujui Selesai');
     await tester.dragUntilVisible(
-      pinButton,
+      approveButton,
       find.byType(CustomScrollView),
       const Offset(0, -300),
     );
-    await tester.tap(pinButton);
+    await tester.tap(approveButton);
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '01234');
-    tester.testTextInput.hide();
-    await tester.pump();
-    await tester.ensureVisible(find.text('Verifikasi PIN'));
-    await tester.tap(find.text('Verifikasi PIN'));
-    await tester.pumpAndSettle();
-
     expect(find.text('Akhiri ujian?'), findsOneWidget);
     expect(ended, isFalse);
     await tester.tap(find.text('Batal'));
     await tester.pumpAndSettle();
     expect(find.text('Persetujuan Selesai'), findsOneWidget);
     expect(ended, isFalse);
-
-    await tester.tap(pinButton);
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '01234');
-    tester.testTextInput.hide();
-    await tester.pump();
-    await tester.ensureVisible(find.text('Verifikasi PIN'));
-    await tester.tap(find.text('Verifikasi PIN'));
+    await tester.tap(approveButton);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Akhiri Ujian'));
     await tester.pumpAndSettle();
@@ -126,7 +101,6 @@ void main() {
     expect(find.text('Google Forms'), findsNothing);
     expect(tester.takeException(), isNull);
   });
-
   testWidgets('S05 blocks the exam until the warning is acknowledged', (
     tester,
   ) async {
@@ -134,15 +108,12 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-
     await tester.pumpWidget(
       MaterialApp(
         home: ExamScreen(
           session: session(),
           violationCount: 1,
           violationReason: 'Anda meninggalkan layar ujian.',
-          verifySupervisorPin: (_) => false,
-          cancelEndAuthorization: () {},
           registerViolation: (trigger) async => const ViolationResultMsg(
             outcome: ViolationOutcome.warned,
             violationCount: 1,
@@ -160,14 +131,11 @@ void main() {
         ),
       ),
     );
-
     expect(find.text('Peringatan pertama'), findsOneWidget);
     expect(find.text('Pelanggaran: 1'), findsOneWidget);
-
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.text('Peringatan pertama'), findsOneWidget);
-
     await tester.tap(find.text('Kembali ke Ujian'));
     await tester.pumpAndSettle();
     expect(find.text('Peringatan pertama'), findsNothing);
@@ -175,7 +143,6 @@ void main() {
     expect(find.text('Pelanggaran: 1'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
-
   testWidgets('lifecycle ambigu tidak menghitung pelanggaran atau mengunci', (
     tester,
   ) async {
@@ -183,7 +150,6 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-
     var locked = false;
     var registered = 0;
     var ambiguousEvents = 0;
@@ -193,8 +159,6 @@ void main() {
           session: session(),
           violationCount: 0,
           violationReason: null,
-          verifySupervisorPin: (_) => false,
-          cancelEndAuthorization: () {},
           registerViolation: (trigger) async {
             registered++;
             return const ViolationResultMsg(
@@ -219,30 +183,24 @@ void main() {
         ),
       ),
     );
-
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     await tester.pumpAndSettle();
-
     expect(locked, isFalse);
     expect(registered, 0);
     expect(ambiguousEvents, 2);
     expect(tester.takeException(), isNull);
   });
-
   testWidgets(
     'status attempt baru memperbarui layar tanpa membuat ulang Form',
     (tester) async {
       var formInitializations = 0;
-
       Widget screen(int violationCount) => MaterialApp(
         home: ExamScreen(
           key: const ValueKey('exam'),
           session: session(),
           violationCount: violationCount,
           violationReason: 'Aplikasi ditinggalkan.',
-          verifySupervisorPin: (_) => false,
-          cancelEndAuthorization: () {},
           registerViolation: (_) async => const ViolationResultMsg(
             outcome: ViolationOutcome.warned,
             violationCount: 1,
@@ -256,17 +214,14 @@ void main() {
           formContent: _StatefulForm(onInit: () => formInitializations++),
         ),
       );
-
       await tester.pumpWidget(screen(2));
       expect(formInitializations, 1);
       expect(find.text('Pelanggaran: 2'), findsOneWidget);
-
       await tester.pumpWidget(screen(3));
       expect(formInitializations, 1);
       expect(find.text('Pelanggaran: 3'), findsOneWidget);
     },
   );
-
   testWidgets('mode guru aktif hanya dibuka melalui callback aplikasi', (
     tester,
   ) async {
@@ -277,8 +232,6 @@ void main() {
           session: session(),
           violationCount: 0,
           violationReason: null,
-          verifySupervisorPin: (_) => false,
-          cancelEndAuthorization: () {},
           registerViolation: (_) async => const ViolationResultMsg(
             outcome: ViolationOutcome.warned,
             violationCount: 1,
@@ -294,7 +247,6 @@ void main() {
         ),
       ),
     );
-
     await tester.tap(find.byTooltip('Mode Guru'));
     expect(opened, isTrue);
   });
@@ -302,9 +254,7 @@ void main() {
 
 class _StatefulForm extends StatefulWidget {
   const _StatefulForm({required this.onInit});
-
   final VoidCallback onInit;
-
   @override
   State<_StatefulForm> createState() => _StatefulFormState();
 }

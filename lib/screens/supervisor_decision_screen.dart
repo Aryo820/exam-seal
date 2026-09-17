@@ -128,12 +128,12 @@ class SupervisorDecisionScreen extends StatelessWidget {
                           Icon(
                             Icons.verified_user_outlined,
                             color: Color(0xFF216E4E),
-                            semanticLabel: 'PIN pengawas valid',
+                            semanticLabel: 'Konfirmasi pengawas',
                           ),
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'PIN pengawas valid. Pilih satu tindakan untuk sesi ini.',
+                              'Pilih satu tindakan untuk sesi ini.',
                               style: TextStyle(fontSize: 14, height: 1.5),
                             ),
                           ),

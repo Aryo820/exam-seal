@@ -79,4 +79,3 @@ class _BootScreenState extends State<BootScreen> {
   @override
   Widget build(BuildContext context) => const SplashPlaceholder();
 }
-

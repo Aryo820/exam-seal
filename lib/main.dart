@@ -8,7 +8,6 @@ import 'core/exam_app.dart';
 import 'services/exam_protection.dart';
 import 'services/exam_session_controller.dart';
 import 'services/session_store.dart';
-import 'services/teacher_session_secrets.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,7 +41,6 @@ Future<ExamSessionController> _openController() async {
 
   final controller = ExamSessionController(
     store: store,
-    secrets: TeacherSessionSecrets.secure(),
     now: () => DateTime.now(),
   );
   controller.attachProtection(ExamProtection());

@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('S11 creates a new attempt only after PIN and confirmation', (
-    tester,
-  ) async {
+  testWidgets('S11 creates a new attempt after confirmation', (tester) async {
     tester.view.physicalSize = const Size(360, 640);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -14,7 +12,6 @@ void main() {
 
     bool? approved;
     var repeated = 0;
-    var authorizationCancelled = false;
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -33,15 +30,9 @@ void main() {
                           formUrl: Uri.parse(
                             'https://docs.google.com/forms/d/e/example/viewform',
                           ),
-                          pinSalt: 'c2FsdA==',
-                          pinVerifier: 'dmVyaWZpZXI=',
                         ),
                         previousViolationCount: 2,
-                        verifySupervisorPin: (pin) => pin == '01234',
                         onRepeatApproved: () async => repeated++,
-                        onAuthorizationCancelled: () {
-                          authorizationCancelled = true;
-                        },
                       ),
                     ),
                   );
@@ -62,12 +53,9 @@ void main() {
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('PIN Pengawas').hitTestable());
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '01234');
-    tester.testTextInput.hide();
-    await tester.pump();
-    await tester.tap(find.text('Verifikasi PIN'));
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Buat Attempt Baru').hitTestable(),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Buat attempt baru?'), findsOneWidget);
@@ -76,16 +64,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Sesi ini sudah diakhiri'), findsOneWidget);
     expect(approved, isNull);
-    expect(authorizationCancelled, isTrue);
-
-    await tester.tap(find.text('PIN Pengawas').hitTestable());
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Buat Attempt Baru').hitTestable(),
+    );
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '01234');
-    tester.testTextInput.hide();
-    await tester.pump();
-    await tester.tap(find.text('Verifikasi PIN'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Buat Attempt Baru'));
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Buat Attempt Baru').last,
+    );
     await tester.pumpAndSettle();
 
     expect(approved, isTrue);

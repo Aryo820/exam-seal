@@ -32,8 +32,6 @@ void main() {
     sessionCode: 'MTK-7K2P',
     examName: 'Matematika Kelas XI',
     formUrl: Uri.parse('https://docs.google.com/forms/d/e/abc/viewform'),
-    pinSalt: 'c2FsdA==',
-    pinVerifier: 'dmVyaWZpZXI=',
     createdAt: DateTime.utc(2026, 9, 13, 8),
   );
 
@@ -50,17 +48,6 @@ void main() {
     expect(restored.violationCount, 0);
   });
 
-  test('mutasi Form ditolak atomik saat attempt sudah dimulai', () async {
-    final store = await newStore();
-    await store.saveSession(session);
-    await store.startAttempt(session, attemptNumber: 1);
-
-    await expectLater(
-      store.beginFormTest(session, DateTime.now()),
-      throwsA(isA<StorageFailure>()),
-    );
-  });
-
   test(
     'scan serentak dengan ID sama tidak menerima konfigurasi yang berbeda',
     () async {
@@ -71,8 +58,6 @@ void main() {
         sessionCode: session.sessionCode,
         examName: session.examName,
         formUrl: Uri.parse('https://forms.gle/other'),
-        pinSalt: session.pinSalt,
-        pinVerifier: session.pinVerifier,
       );
       await store.saveSession(session);
       await expectLater(
@@ -132,8 +117,6 @@ void main() {
       sessionCode: 'OLD-1234',
       examName: 'Ujian Lama',
       formUrl: Uri.parse('https://docs.google.com/forms/d/e/old/viewform'),
-      pinSalt: 'c2FsdA==',
-      pinVerifier: 'dmVyaWZpZXI=',
       createdAt: DateTime.utc(2026, 9, 1),
     );
     await store.saveSession(oldSession);
@@ -211,8 +194,6 @@ void main() {
         sessionCode: 'UNUSED-1',
         examName: 'Sesi Guru Belum Dipakai',
         formUrl: Uri.parse('https://docs.google.com/forms/d/e/unused/viewform'),
-        pinSalt: 'c2FsdA==',
-        pinVerifier: 'dmVyaWZpZXI=',
         createdAt: now,
       );
       await store.saveSession(unusedSession);
@@ -225,10 +206,7 @@ void main() {
         containsAll([exactBoundary, ...held]),
       );
       expect(await store.loadAttempt(expired), isNull);
-      expect(
-        (await store.loadSession(session.sessionId))!.pinVerifier,
-        session.pinVerifier,
-      );
+      expect(await store.loadSession(session.sessionId), isNotNull);
       expect(await store.loadSession(unusedSession.sessionId), isNotNull);
     },
   );
@@ -401,7 +379,6 @@ void main() {
     expect(sessions.length, 1);
     expect(sessions.first.sessionId, 'session-1');
     expect(sessions.first.sessionCode, 'MTK-7K2P');
-    expect(sessions.first.pinVerifier, 'dmVyaWZpZXI=');
 
     // Sesi konsisten: tidak ada duplikat saat disimpan ulang.
     await store.saveSession(session);

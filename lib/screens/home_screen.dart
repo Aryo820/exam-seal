@@ -1,24 +1,18 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import 'scan_qr_screen.dart';
-import 'supervisor_pin_screen.dart';
 import 'teacher_sessions_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
     this.hasActiveStudentSession = false,
-    this.verifySupervisorPin,
     this.onResumeStudentSession,
     this.onOpenTeacherMode,
     this.onOpenStudentScan,
     super.key,
-  }) : assert(!hasActiveStudentSession || verifySupervisorPin != null),
-       assert(!hasActiveStudentSession || onResumeStudentSession != null);
+  }) : assert(!hasActiveStudentSession || onResumeStudentSession != null);
 
   final bool hasActiveStudentSession;
-  final FutureOr<bool> Function(String pin)? verifySupervisorPin;
   final VoidCallback? onResumeStudentSession;
   final VoidCallback? onOpenTeacherMode;
   final VoidCallback? onOpenStudentScan;
@@ -62,7 +56,7 @@ class HomeScreen extends StatelessWidget {
             _mode(
               context,
               'Guru',
-              'Siapkan sesi ujian, PIN pengawas, dan QR untuk siswa.',
+              'Siapkan sesi ujian dan QR untuk siswa.',
               Icons.school_outlined,
               false,
             ),
@@ -107,9 +101,7 @@ class HomeScreen extends StatelessWidget {
             openScan();
           } else {
             Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const ScanQrScreen(),
-              ),
+              MaterialPageRoute<void>(builder: (_) => const ScanQrScreen()),
             );
           }
         } else if (hasActiveStudentSession) {
@@ -142,7 +134,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   Future<void> _confirmTeacherMode(BuildContext context) async {
-    final enterPin = await showDialog<bool>(
+    final openTeacherMode = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => Dialog(
@@ -184,23 +176,6 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              const Divider(color: Color(0xFFD6D6D6)),
-              const SizedBox(height: 12),
-              const Row(
-                children: [
-                  Icon(Icons.lock_outline, size: 20),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'PIN pengawas diperlukan.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
               const SizedBox(height: 24),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -223,7 +198,7 @@ class HomeScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                child: const Text('Masukkan PIN Pengawas'),
+                child: const Text('Buka Mode Guru'),
               ),
             ],
           ),
@@ -231,23 +206,13 @@ class HomeScreen extends StatelessWidget {
       ),
     );
 
-    if (!context.mounted || enterPin == null) return;
-    if (!enterPin) {
+    if (!context.mounted || openTeacherMode == null) return;
+    if (!openTeacherMode) {
       onResumeStudentSession!();
       return;
     }
 
-    final verified = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => SupervisorPinScreen(
-          heading: 'Buka mode guru',
-          description:
-              'Masukkan PIN pengawas lima digit untuk membuka mode guru. Sesi siswa tetap aktif.',
-          verifyPin: verifySupervisorPin!,
-        ),
-      ),
-    );
-    if (verified == true && context.mounted) _openTeacherMode(context);
+    if (context.mounted) _openTeacherMode(context);
   }
 
   void _openTeacherMode(BuildContext context) {

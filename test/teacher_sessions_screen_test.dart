@@ -39,17 +39,17 @@ void main() {
       expect(find.textContaining('pemantauan siswa'), findsOneWidget);
       expect(find.textContaining('siswa online'), findsNothing);
 
-      await tester.tap(find.text('Buat Sesi Baru'));
+      await tester.tap(find.text('Buat QR Ujian'));
       expect(createRequested, isTrue);
 
-    await tester.scrollUntilVisible(
-      find.text('Tampilkan QR'),
-      500,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.ensureVisible(find.text('Tampilkan QR'));
-    await tester.pump();
-    await tester.tap(find.text('Tampilkan QR'));
+      await tester.scrollUntilVisible(
+        find.text('Tampilkan QR'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(find.text('Tampilkan QR'));
+      await tester.pump();
+      await tester.tap(find.text('Tampilkan QR'));
       expect(qrSession, same(session));
       expect(tester.takeException(), isNull);
     },

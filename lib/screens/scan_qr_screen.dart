@@ -14,7 +14,7 @@ class ScanQrScreen extends StatefulWidget {
   const ScanQrScreen({this.onSession, super.key});
 
   /// Dipanggil sekali untuk payload QR sah; composition root yang
-  /// memutuskan rute berikutnya (pre-exam, status tersimpan, atau PIN
+  /// memutuskan rute berikutnya (pre-exam, status tersimpan, atau konfirmasi
   /// pengulangan).
   final FutureOr<void> Function(ExamSession session)? onSession;
 

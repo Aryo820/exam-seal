@@ -143,7 +143,7 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
             ),
             icon: const Icon(Icons.add, size: 20),
             label: const Text(
-              'Buat Sesi Baru',
+              'Buat QR Ujian',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),

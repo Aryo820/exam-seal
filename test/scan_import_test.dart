@@ -1,11 +1,9 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:examseal/models/exam_sessions.dart';
 import 'package:examseal/services/attempt_state_machine.dart';
 import 'package:examseal/services/exam_session_controller.dart';
 import 'package:examseal/services/session_store.dart';
-import 'package:examseal/services/teacher_session_secrets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -17,14 +15,9 @@ void main() {
     sessionCode: 'MTK-1234',
     examName: name,
     formUrl: Uri.parse('https://forms.gle/example'),
-    pinSalt: base64Encode(List.filled(16, 1)),
-    pinVerifier: base64Encode(List.filled(32, 2)),
   );
-  ExamSessionController controller(SessionStore store) => ExamSessionController(
-    store: store,
-    secrets: TeacherSessionSecrets.inMemory(),
-    now: DateTime.now,
-  );
+  ExamSessionController controller(SessionStore store) =>
+      ExamSessionController(store: store, now: DateTime.now);
   late Database db;
   late SessionStore store;
   setUp(() async {
@@ -47,7 +40,7 @@ void main() {
       expect(results.every((r) => r.route == ScanImportRoute.preExam), isTrue);
       expect(await store.listSessions(), hasLength(1));
       expect(await store.loadCurrentAttempt(), isNull);
-      expect(await app.listTeacherSessions(), isEmpty);
+      expect(await app.listTeacherSessions(), hasLength(1));
       final ready = await app.assessReadiness(scanned);
       expect(ready.qrValid && ready.urlValid && ready.storageWritable, isTrue);
       expect(ready.allMandatoryPassed, isFalse);
@@ -90,7 +83,7 @@ void main() {
       );
       expect(
         (await app.importScannedSession(original)).route,
-        ScanImportRoute.endedNeedsPin,
+        ScanImportRoute.endedNeedsConfirmation,
       );
     },
   );

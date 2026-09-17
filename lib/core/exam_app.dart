@@ -6,16 +6,11 @@ import '../models/exam_sessions.dart';
 import '../services/attempt_state_machine.dart';
 import '../services/exam_session_controller.dart';
 import '../services/exam_protection.dart';
-import '../services/local_auth_gate.dart';
 import '../services/session_store.dart';
 import '../screens/boot_screen.dart' show SplashPlaceholder;
 import '../screens/create_session_screen.dart';
 import '../screens/ended_screen.dart';
 import '../screens/exam_screen.dart';
-import '../screens/form_test_screen.dart';
-import '../screens/form_test_run_screen.dart';
-import '../screens/supervisor_pin_access_screen.dart';
-import '../screens/supervisor_pin_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/locked_screen.dart';
 import '../screens/pre_exam_screen.dart';
@@ -158,16 +153,6 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
     _protectionNotice.value = notice;
   }
 
-  Future<bool> _verifySupervisorPin(String pin) async {
-    final session = _current?.session;
-    if (session != null) {
-      return controller.verifySupervisorPin(pin, session);
-    }
-    final sessions = await controller.listTeacherSessions();
-    if (sessions.isEmpty) return false;
-    return controller.verifySupervisorPin(pin, sessions.first);
-  }
-
   void _push(Widget screen) {
     _navigatorKey.currentState?.pushReplacement(
       MaterialPageRoute<void>(builder: (_) => screen),
@@ -228,65 +213,24 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
 
   Widget _homeScreen() => HomeScreen(
     hasActiveStudentSession: _current != null,
-    verifySupervisorPin: (pin) async {
-      final session = _current?.session;
-      return session != null &&
-          await controller.authorizeTeacherMode(pin, session);
-    },
     onResumeStudentSession: _resumeStoredAttempt,
-    onOpenTeacherMode: () => unawaited(
-      _current == null ? _openTeacherMode() : _openTeacherModeAfterActivePin(),
-    ),
+    onOpenTeacherMode: () => unawaited(_openTeacherMode()),
     onOpenStudentScan: () => _navigatorKey.currentState?.push(
       MaterialPageRoute<void>(builder: (_) => _scanScreen()),
     ),
   );
 
   Future<void> _openTeacherMode() async {
-    try {
-      await _navigatorKey.currentState?.push<void>(
-        MaterialPageRoute(
-          builder: (_) => TeacherSessionsScreen(
-            loadSessions: controller.listTeacherSessions,
-            canCreateSession: _current == null,
-            onCreateSession: _openCreateSession,
-            onShowQr: _openSessionQr,
-          ),
-        ),
-      );
-    } finally {
-      controller.closeTeacherMode();
-    }
-  }
-
-  Future<void> _openTeacherModeFromActive(ExamSession session) async {
-    final verified = await _navigatorKey.currentState?.push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => SupervisorPinScreen(
-          heading: 'Buka mode guru',
-          description:
-              'Masukkan PIN pengawas lima digit. Sesi siswa tetap aktif.',
-          verifyPin: (pin) => controller.authorizeTeacherMode(pin, session),
+    await _navigatorKey.currentState?.push<void>(
+      MaterialPageRoute(
+        builder: (_) => TeacherSessionsScreen(
+          loadSessions: controller.listTeacherSessions,
+          canCreateSession: _current == null,
+          onCreateSession: _openCreateSession,
+          onShowQr: _openSessionQr,
         ),
       ),
     );
-    if (verified != true || !mounted) return;
-    if (!await controller.confirmTeacherModeAfterActivePin() || !mounted) {
-      return;
-    }
-    await _openTeacherMode();
-  }
-
-  Future<void> _openTeacherModeAfterActivePin() async {
-    if (!await controller.confirmTeacherModeAfterActivePin() || !mounted) {
-      return;
-    }
-    await _openTeacherMode();
-  }
-
-  Future<void> _openTeacherModeAfterVerifiedPin() async {
-    if (!await controller.authorizeTeacherModeAfterVerifiedPin()) return;
-    if (mounted) await _openTeacherMode();
   }
 
   Future<void> _openCreateSession() async {
@@ -311,64 +255,6 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
 
   Future<void> _openSessionQr(ExamSession session) async {
     try {
-      final formConfirmed = await controller.isFormConfirmed(session);
-      if (!formConfirmed && _current != null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Form belum siap. Mode Guru hanya dapat melihat sesi selama ujian berlangsung.',
-            ),
-          ),
-        );
-        return;
-      }
-      if (!formConfirmed) {
-        if (!mounted) return;
-        var inspected = false;
-        final confirmed = await _navigatorKey.currentState?.push<bool>(
-          MaterialPageRoute(
-            builder: (formContext) => FormTestScreen(
-              session: session,
-              onAccessPin: () => _navigatorKey.currentState?.push<void>(
-                MaterialPageRoute(
-                  builder: (_) => SupervisorPinAccessScreen(
-                    session: session,
-                    authenticateDevice: LocalAuthGate.authenticate,
-                    readPin: () => controller.readTeacherPin(session.sessionId),
-                  ),
-                ),
-              ),
-              runFormTest: () async {
-                inspected = false;
-                await controller.beginFormTest(session);
-                if (!mounted ||
-                    !formContext.mounted ||
-                    ModalRoute.of(formContext)?.isCurrent != true) {
-                  return false;
-                }
-                inspected =
-                    await _navigatorKey.currentState?.push<bool>(
-                      MaterialPageRoute(
-                        builder: (_) => FormTestRunScreen(
-                          session: session,
-                          verifyPin: (pin) =>
-                              controller.verifySupervisorPin(pin, session),
-                          recordBlocked: () =>
-                              controller.recordFormNavigationBlocked(session),
-                        ),
-                      ),
-                    ) ==
-                    true;
-                return inspected;
-              },
-              confirmFormReady: () async =>
-                  inspected && await controller.confirmFormReady(session),
-            ),
-          ),
-        );
-        if (confirmed != true) return;
-      }
       if (!mounted) return;
       await _navigatorKey.currentState?.push<void>(
         MaterialPageRoute(builder: (_) => _sessionQrScreen(session)),
@@ -379,7 +265,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'QR belum dapat dibuka. Periksa penyimpanan dan ulangi pemeriksaan Form.',
+              'QR belum dapat dibuka. Periksa penyimpanan lalu coba lagi.',
             ),
           ),
         );
@@ -387,11 +273,8 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
     }
   }
 
-  Widget _sessionQrScreen(ExamSession session) => SessionQrScreen(
-    session: session,
-    authenticateSupervisor: LocalAuthGate.authenticate,
-    readSupervisorPin: () => controller.readTeacherPin(session.sessionId),
-  );
+  Widget _sessionQrScreen(ExamSession session) =>
+      SessionQrScreen(session: session);
 
   // ---- Mode siswa ----
 
@@ -416,7 +299,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
         throw StorageFailure(
           'Status sesi berubah. Scan ulang untuk memeriksa status terbaru.',
         );
-      case ScanImportRoute.endedNeedsPin:
+      case ScanImportRoute.endedNeedsConfirmation:
         final previous = await controller.loadLastEndedAttemptFor(scanned);
         _push(_repeatScreen(scanned, previous?.violationCount ?? 0));
       case null:
@@ -474,8 +357,6 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       protectionNotice: _protectionNotice,
       violationCount: current.violationCount,
       violationReason: current.violationReason,
-      verifySupervisorPin: (pin) => controller.authorizeEnd(pin, session),
-      cancelEndAuthorization: controller.cancelEndAuthorization,
       registerViolation: (trigger) async {
         final result = await controller.registerViolation(trigger);
         return ViolationResultMsg(
@@ -486,12 +367,12 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       },
       recordAmbiguousEvent: (type) => controller.recordAmbiguousEvent(type),
       onViolationLock: _onViolationLock,
-      endAttemptWithAuthorization: () => controller.finishAttemptAfterPin(
+      endAttemptWithAuthorization: () => controller.finishCurrentAttempt(
         reason: 'Diakhiri pengawas setelah pemeriksaan pengiriman jawaban.',
       ),
       retryRestoreSettings: controller.retryRestoreSettings,
       onReturnHome: _goHome,
-      onOpenTeacherMode: () => unawaited(_openTeacherModeFromActive(session)),
+      onOpenTeacherMode: () => unawaited(_openTeacherMode()),
     );
   }
 
@@ -512,13 +393,10 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       session: session,
       violationCount: current.violationCount,
       violationReason: AttemptStateMachine.describeTrigger(rawReason),
-      verifySupervisorPin: _verifySupervisorPin,
       onContinueExam: _continueProtectedAttempt,
-      onAuthorizationCancelled: controller.cancelSupervisorAuthorization,
-      onOpenTeacherMode: _openTeacherModeAfterVerifiedPin,
+      onOpenTeacherMode: _openTeacherMode,
       onEndExam: () async {
-        if (!await controller.authorizeEndAfterVerifiedPin()) return;
-        final restored = await controller.finishAttemptAfterPin(
+        final restored = await controller.finishCurrentAttempt(
           reason: 'Diakhiri pengawas dari ujian terkunci.',
         );
         if (!mounted) return;
@@ -535,13 +413,10 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
     return ProcessRecoveryScreen(
       session: session,
       violationCount: current.violationCount,
-      verifySupervisorPin: _verifySupervisorPin,
       onContinueExam: _continueProtectedAttempt,
-      onAuthorizationCancelled: controller.cancelSupervisorAuthorization,
-      onOpenTeacherMode: _openTeacherModeAfterVerifiedPin,
+      onOpenTeacherMode: _openTeacherMode,
       onEndExam: () async {
-        if (!await controller.authorizeEndAfterVerifiedPin()) return;
-        final restored = await controller.finishAttemptAfterPin(
+        final restored = await controller.finishCurrentAttempt(
           reason: 'Diakhiri pengawas setelah pemulihan aplikasi.',
         );
         if (!mounted) return;
@@ -568,7 +443,7 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
   }
 
   Future<void> _continueProtectedAttempt() async {
-    if (!await controller.confirmContinueAfterPin()) {
+    if (!await controller.continueLockedAttempt()) {
       final context = _navigatorKey.currentContext;
       if (context != null && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -591,9 +466,6 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       RepeatSessionScreen(
         session: session,
         previousViolationCount: previousViolationCount,
-        verifySupervisorPin: (pin) =>
-            controller.verifyRepeatSupervisorPin(pin, session),
-        onAuthorizationCancelled: controller.cancelSupervisorAuthorization,
         onRepeatApproved: () async {
           final result = await controller.repeatStudentAttempt(session);
           if (!mounted) return;
@@ -604,13 +476,11 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
       );
 
   ExamSession _fallbackSession() => ExamSession(
-    schemaVersion: 2,
+    schemaVersion: 3,
     sessionId: 'unknown',
     sessionCode: '—',
     examName: 'Sesi ujian',
     formUrl: Uri.parse('https://forms.gle/example'),
-    pinSalt: '',
-    pinVerifier: '',
   );
 
   @override

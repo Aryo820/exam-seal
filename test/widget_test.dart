@@ -1,8 +1,7 @@
-﻿import 'package:examseal/core/exam_app.dart';
+import 'package:examseal/core/exam_app.dart';
 import 'package:examseal/main.dart' show ExamSealRoot;
 import 'package:examseal/services/exam_session_controller.dart';
 import 'package:examseal/services/session_store.dart';
-import 'package:examseal/services/teacher_session_secrets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -20,11 +19,12 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
-    final db = await databaseFactoryFfiNoIsolate.openDatabase(inMemoryDatabasePath);
+    final db = await databaseFactoryFfiNoIsolate.openDatabase(
+      inMemoryDatabasePath,
+    );
     final store = await SessionStore.open(db);
     final controller = ExamSessionController(
       store: store,
-      secrets: TeacherSessionSecrets.inMemory(),
       now: () => DateTime.now(),
     );
     controller.attachProtectionStub(
@@ -41,7 +41,7 @@ void main() {
       Colors.white,
     );
     expect(tester.takeException(), isNull);
-    // Boot selesai â†’ beranda.
+    // Boot selesai Ã¢â€ â€™ beranda.
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
     expect(find.text('Pilih mode'), findsOneWidget);
@@ -85,11 +85,12 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final db = await databaseFactoryFfiNoIsolate.openDatabase(inMemoryDatabasePath);
+    final db = await databaseFactoryFfiNoIsolate.openDatabase(
+      inMemoryDatabasePath,
+    );
     final store = await SessionStore.open(db);
     final controller = ExamSessionController(
       store: store,
-      secrets: TeacherSessionSecrets.inMemory(),
       now: () => DateTime.now(),
     );
 

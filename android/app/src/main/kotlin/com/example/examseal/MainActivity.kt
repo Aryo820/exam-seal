@@ -6,7 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import android.view.WindowManager
-import io.flutter.embedding.android.FlutterFragmentActivity
+import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -22,7 +22,7 @@ import io.flutter.plugin.common.MethodChannel
  * pasti terblokir di semua HP, atau Google Forms pasti sudah submit.
  * Akses DND tidak pernah diminta/diubah otomatis saat aplikasi dibuka.
  */
-class MainActivity : FlutterFragmentActivity() {
+class MainActivity : FlutterActivity() {
     private val channelName = "examseal/protection"
     private val protectionPreferences by lazy {
         getSharedPreferences("examseal_protection", Context.MODE_PRIVATE)

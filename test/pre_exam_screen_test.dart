@@ -11,8 +11,6 @@ void main() {
     sessionCode: 'MTH-7K2P',
     examName: 'Matematika Kelas XI',
     formUrl: Uri.parse('https://docs.google.com/forms/d/e/example/viewform'),
-    pinSalt: 'c2FsdA==',
-    pinVerifier: 'dmVyaWZpZXI=',
   );
 
   Widget screen({
@@ -55,7 +53,7 @@ void main() {
       expect(find.text('Matematika Kelas XI'), findsOneWidget);
       expect(find.text('MTH-7K2P'), findsOneWidget);
 
-      // Readiness nyata: proteksi belum tersedia → tombol nonaktif.
+      // Readiness nyata: proteksi belum tersedia â†’ tombol nonaktif.
       await tester.scrollUntilVisible(
         find.text('Akses belum diberikan'),
         300,

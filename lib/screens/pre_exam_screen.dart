@@ -246,7 +246,7 @@ class _PreExamScreenState extends State<PreExamScreen>
             const _Rule(
               number: '2',
               text:
-                  'Keluar dari sesi membutuhkan persetujuan dan PIN pengawas.',
+                  'Keluar dari sesi membutuhkan persetujuan pengawas.',
             ),
             const _Rule(
               number: '3',

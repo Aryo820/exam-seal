@@ -1,11 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:examseal/models/exam_sessions.dart';
 import 'package:examseal/core/exam_app.dart';
 import 'package:examseal/screens/pre_exam_screen.dart';
 import 'package:examseal/services/exam_session_controller.dart';
-import 'package:examseal/services/teacher_session_secrets.dart';
 import 'package:examseal/screens/scan_qr_screen.dart';
 import 'package:examseal/services/qr_codec.dart';
 import 'package:examseal/services/session_store.dart';
@@ -57,13 +54,11 @@ class ScannerPlatform extends MobileScannerPlatform {
 void main() {
   sqfliteFfiInit();
   final session = ExamSession(
-    schemaVersion: 2,
+    schemaVersion: 3,
     sessionId: 'scan-1',
     sessionCode: 'MTK-1234',
     examName: 'Matematika',
     formUrl: Uri.parse('https://forms.gle/example'),
-    pinSalt: base64Encode(List.filled(16, 1)),
-    pinVerifier: base64Encode(List.filled(32, 2)),
   );
   BarcodeCapture capture(String payload) => BarcodeCapture(
     barcodes: [Barcode(rawValue: payload, format: BarcodeFormat.qrCode)],
@@ -137,7 +132,6 @@ void main() {
       final store = await SessionStore.open(db);
       final app = ExamSessionController(
         store: store,
-        secrets: TeacherSessionSecrets.inMemory(),
         now: DateTime.now,
       );
       await tester.pumpWidget(ExamApp(controller: app));

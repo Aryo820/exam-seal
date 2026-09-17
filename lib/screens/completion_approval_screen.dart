@@ -1,24 +1,17 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../models/exam_sessions.dart';
-import 'supervisor_pin_screen.dart';
 
 /// Stitch S08 - Persetujuan Selesai.
 class CompletionApprovalScreen extends StatefulWidget {
   const CompletionApprovalScreen({
     required this.session,
     required this.violationCount,
-    required this.verifySupervisorPin,
-    required this.cancelEndAuthorization,
     super.key,
   });
 
   final ExamSession session;
   final int violationCount;
-  final FutureOr<bool> Function(String pin) verifySupervisorPin;
-  final VoidCallback cancelEndAuthorization;
 
   @override
   State<CompletionApprovalScreen> createState() =>
@@ -26,28 +19,7 @@ class CompletionApprovalScreen extends StatefulWidget {
 }
 
 class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
-  int _failedPinAttempts = 0;
-  DateTime? _pinLockedUntil;
-
   Future<void> _requestEndApproval() async {
-    final verified = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => SupervisorPinScreen(
-          heading: 'Akhiri ujian',
-          description:
-              'Setelah memeriksa bukti pengiriman Google Forms, masukkan PIN pengawas lima digit.',
-          verifyPin: widget.verifySupervisorPin,
-          initialFailedAttempts: _failedPinAttempts,
-          initialLockedUntil: _pinLockedUntil,
-          onAttemptStateChanged: (attempts, lockedUntil) {
-            _failedPinAttempts = attempts;
-            _pinLockedUntil = lockedUntil;
-          },
-        ),
-      ),
-    );
-    if (verified != true || !mounted) return;
-
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -77,11 +49,7 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
         ],
       ),
     );
-    if (confirmed == true && mounted) {
-      Navigator.of(context).pop(true);
-    } else {
-      widget.cancelEndAuthorization();
-    }
+    if (confirmed == true && mounted) Navigator.of(context).pop(true);
   }
 
   @override
@@ -155,7 +123,7 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      'Pengawas perlu memeriksa bukti pengiriman jawaban pada perangkat ini sebelum memasukkan PIN.',
+                      'Pengawas perlu memeriksa bukti pengiriman jawaban pada perangkat ini sebelum mengakhiri sesi.',
                       style: TextStyle(fontSize: 16, height: 1.5),
                     ),
                     const SizedBox(height: 24),
@@ -196,9 +164,9 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      icon: const Icon(Icons.lock_outline, size: 20),
+                      icon: const Icon(Icons.check_circle_outline, size: 20),
                       label: const Text(
-                        'PIN Pengawas',
+                        'Setujui Selesai',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,

@@ -3,7 +3,6 @@ import 'package:examseal/screens/process_recovery_screen.dart';
 import 'package:examseal/services/attempt_state_machine.dart';
 import 'package:examseal/services/exam_session_controller.dart';
 import 'package:examseal/services/session_store.dart';
-import 'package:examseal/services/teacher_session_secrets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -18,7 +17,6 @@ void main() {
     final store = await SessionStore.open(db);
     final controller = ExamSessionController(
       store: store,
-      secrets: TeacherSessionSecrets.inMemory(),
       now: () => DateTime.now(),
     );
     controller.attachProtectionStub(
@@ -54,7 +52,7 @@ void main() {
     await a.registerViolation('appLeftWhileActive');
     expect((await a.loadCurrentAttempt())!.state, AttemptState.active);
 
-    // Boot ulang: attempt aktif → recoveryPending, bukan Google Forms.
+    // Boot ulang: attempt aktif â†’ recoveryPending, bukan Google Forms.
     final b = await seededController(db);
     await tester.pumpWidget(ExamApp(controller: b));
     await tester.pump();

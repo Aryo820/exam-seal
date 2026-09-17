@@ -4,7 +4,6 @@ import 'package:examseal/models/exam_sessions.dart';
 import 'package:examseal/services/attempt_state_machine.dart';
 import 'package:examseal/services/exam_session_controller.dart';
 import 'package:examseal/services/session_store.dart';
-import 'package:examseal/services/teacher_session_secrets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -17,11 +16,7 @@ void main() {
   setUp(() async {
     db = await databaseFactoryFfiNoIsolate.openDatabase(inMemoryDatabasePath);
     store = await SessionStore.open(db);
-    controller = ExamSessionController(
-      store: store,
-      secrets: TeacherSessionSecrets.inMemory(),
-      now: DateTime.now,
-    );
+    controller = ExamSessionController(store: store, now: DateTime.now);
   });
   tearDown(() async {
     if (db.isOpen) await db.close();
@@ -128,11 +123,7 @@ void main() {
       expect((await controller.startStudentAttempt(current)).started, isTrue);
       await controller.markProcessDeath();
 
-      expect(
-        await controller.verifySupervisorPin(created.pin, current),
-        isTrue,
-      );
-      expect(await controller.confirmContinueAfterPin(), isTrue);
+      expect(await controller.continueLockedAttempt(), isTrue);
       expect(protection.activateCalls, 2);
       expect(
         (await controller.loadCurrentAttempt())!.state,
@@ -156,11 +147,7 @@ void main() {
       final failingProtection = _Protection(activationSucceeds: false);
       controller.attachProtection(failingProtection);
 
-      expect(
-        await controller.verifySupervisorPin(created.pin, current),
-        isTrue,
-      );
-      expect(await controller.confirmContinueAfterPin(), isFalse);
+      expect(await controller.continueLockedAttempt(), isFalse);
       expect(failingProtection.activateCalls, 1);
       expect(
         (await controller.loadCurrentAttempt())!.state,

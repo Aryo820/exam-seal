@@ -80,8 +80,6 @@ class StoredEvent {
 /// dan status proteksi (PRD FR12). Semua transisi penting ditulis ke sini
 /// sebelum UI memberi akses baru; kegagalan tulis memblokir transisi.
 ///
-/// PIN mentah tidak pernah disimpan di sini: bahan terlindungi milik HP
-/// pembuat sesi berada di secure storage (PinService).
 class SessionStore {
   SessionStore._(this._db);
 
@@ -98,8 +96,6 @@ class SessionStore {
           session_code TEXT NOT NULL,
           exam_name TEXT NOT NULL,
           form_url TEXT NOT NULL,
-          pin_salt TEXT,
-          pin_verifier TEXT,
           security_policy_version INTEGER NOT NULL DEFAULT 1,
           created_at INTEGER NOT NULL
         )
@@ -155,24 +151,6 @@ class SessionStore {
           prepared_at INTEGER NOT NULL
         )
       ''');
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS pin_attempt_status (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          attempt_id TEXT NOT NULL,
-          failed_attempts INTEGER NOT NULL,
-          locked_until INTEGER,
-          updated_at INTEGER NOT NULL
-        )
-      ''');
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS form_checks (
-          session_id TEXT PRIMARY KEY,
-          form_url TEXT NOT NULL,
-          started_at INTEGER NOT NULL,
-          checked_at INTEGER,
-          blocked_navigations INTEGER NOT NULL DEFAULT 0
-        )
-      ''');
       return SessionStore._(db);
     } on DatabaseException catch (e) {
       throw StorageFailure('Penyimpanan sesi gagal dibuka: $e');
@@ -190,79 +168,6 @@ class SessionStore {
   }
 
   // ---- Sesi ----
-
-  Future<bool> isFormConfirmed(ExamSession session) => _guard(
-    'membaca pemeriksaan Form',
-    () async => (await _db.query(
-      'form_checks',
-      where: 'session_id = ? AND form_url = ? AND checked_at IS NOT NULL',
-      whereArgs: [session.sessionId, session.formUrl.toString()],
-    )).isNotEmpty,
-  );
-
-  Future<void> _requireNoCurrentAttempt(DatabaseExecutor executor) async {
-    final current = await executor.query(
-      'attempts',
-      where: 'state IN (?, ?, ?)',
-      whereArgs: [
-        AttemptState.active.name,
-        AttemptState.locked.name,
-        AttemptState.recoveryPending.name,
-      ],
-      limit: 1,
-    );
-    if (current.isNotEmpty) {
-      throw StorageFailure(
-        'Perubahan kesiapan Form ditahan selama percobaan siswa berlangsung.',
-      );
-    }
-  }
-
-  Future<void> beginFormTest(ExamSession session, DateTime now) =>
-      _guard('memulai pemeriksaan Form', () async {
-        await _db.transaction((txn) async {
-          await _requireNoCurrentAttempt(txn);
-          await txn.insert('form_checks', {
-            'session_id': session.sessionId,
-            'form_url': session.formUrl.toString(),
-            'started_at': now.millisecondsSinceEpoch,
-            'checked_at': null,
-            'blocked_navigations': 0,
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
-        });
-      });
-
-  Future<void> recordFormNavigationBlocked(ExamSession session) =>
-      _guard('mencatat navigasi Form yang diblokir', () async {
-        await _db.transaction((txn) async {
-          await _requireNoCurrentAttempt(txn);
-          final changed = await txn.rawUpdate(
-            '''
-        UPDATE form_checks SET blocked_navigations = blocked_navigations + 1
-        WHERE session_id = ? AND form_url = ? AND checked_at IS NULL
-      ''',
-            [session.sessionId, session.formUrl.toString()],
-          );
-          if (changed != 1) throw StorageFailure('Uji Form belum dimulai.');
-        });
-      });
-
-  // Ini pernyataan manual guru, bukan bukti pengiriman dari Google Forms.
-  Future<void> confirmFormReady(ExamSession session, DateTime now) =>
-      _guard('menyimpan konfirmasi guru', () async {
-        await _db.transaction((txn) async {
-          await _requireNoCurrentAttempt(txn);
-          final changed = await txn.update(
-            'form_checks',
-            {'checked_at': now.millisecondsSinceEpoch},
-            where: 'session_id = ? AND form_url = ? AND checked_at IS NULL',
-            whereArgs: [session.sessionId, session.formUrl.toString()],
-          );
-          if (changed != 1) {
-            throw StorageFailure('Jalankan uji Form terlebih dahulu.');
-          }
-        });
-      });
 
   /// Simpan sesi (idempoten untuk sesi identik).
   Future<void> saveSession(
@@ -300,8 +205,6 @@ class SessionStore {
         'session_code': session.sessionCode,
         'exam_name': session.examName,
         'form_url': session.formUrl.toString(),
-        'pin_salt': session.pinSalt,
-        'pin_verifier': session.pinVerifier,
         'security_policy_version': session.securityPolicyVersion,
         'created_at': session.createdAt.millisecondsSinceEpoch,
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
@@ -331,8 +234,6 @@ class SessionStore {
     sessionCode: row['session_code'] as String,
     examName: row['exam_name'] as String,
     formUrl: Uri.parse(row['form_url'] as String),
-    pinSalt: row['pin_salt'] as String?,
-    pinVerifier: row['pin_verifier'] as String?,
     securityPolicyVersion: row['security_policy_version'] as int,
     createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
   );
@@ -767,46 +668,6 @@ class SessionStore {
         );
       });
 
-  // ---- Status PIN ----
-
-  Future<void> savePinAttemptStatus({
-    required String attemptId,
-    required int failedAttempts,
-    DateTime? lockedUntil,
-  }) => _guard('menyimpan status percobaan PIN', () async {
-    await _db.delete(
-      'pin_attempt_status',
-      where: 'attempt_id = ?',
-      whereArgs: [attemptId],
-    );
-    await _db.insert('pin_attempt_status', {
-      'attempt_id': attemptId,
-      'failed_attempts': failedAttempts,
-      'locked_until': lockedUntil?.millisecondsSinceEpoch,
-      'updated_at': DateTime.now().millisecondsSinceEpoch,
-    });
-  });
-
-  Future<({int failedAttempts, DateTime? lockedUntil})> loadPinAttemptStatus(
-    String attemptId,
-  ) => _guard('memuat status percobaan PIN', () async {
-    final rows = await _db.query(
-      'pin_attempt_status',
-      where: 'attempt_id = ?',
-      whereArgs: [attemptId],
-      limit: 1,
-    );
-    if (rows.isEmpty) return (failedAttempts: 0, lockedUntil: null);
-    return (
-      failedAttempts: rows.first['failed_attempts'] as int,
-      lockedUntil: rows.first['locked_until'] == null
-          ? null
-          : DateTime.fromMillisecondsSinceEpoch(
-              rows.first['locked_until'] as int,
-            ),
-    );
-  });
-
   // ---- Retensi ----
 
   /// Pembersihan retensi: hapus HANYA attempt berakhir yang berumur lebih
@@ -850,11 +711,6 @@ class SessionStore {
           where: 'attempt_id = ?',
           whereArgs: [id],
         );
-        await txn.delete(
-          'pin_attempt_status',
-          where: 'attempt_id = ?',
-          whereArgs: [id],
-        );
         await txn.delete('attempts', where: 'attempt_id = ?', whereArgs: [id]);
       }
       // Hanya sesi dengan attempt kedaluwarsa yang menjadi kandidat.
@@ -878,11 +734,6 @@ class SessionStore {
           limit: 1,
         );
         if (remaining.isEmpty && restoring.isEmpty) {
-          await txn.delete(
-            'form_checks',
-            where: 'session_id = ?',
-            whereArgs: [sessionId],
-          );
           await txn.delete(
             'sessions',
             where: 'session_id = ?',

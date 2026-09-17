@@ -1,10 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../models/exam_sessions.dart';
 import 'supervisor_decision_screen.dart';
-import 'supervisor_pin_screen.dart';
 
 /// Stitch S06 - Ujian Terkunci.
 class LockedScreen extends StatefulWidget {
@@ -12,10 +9,8 @@ class LockedScreen extends StatefulWidget {
     required this.session,
     required this.violationCount,
     required this.violationReason,
-    required this.verifySupervisorPin,
     required this.onContinueExam,
     required this.onEndExam,
-    this.onAuthorizationCancelled,
     this.onOpenTeacherMode,
     super.key,
   }) : assert(violationCount >= 3);
@@ -23,10 +18,8 @@ class LockedScreen extends StatefulWidget {
   final ExamSession session;
   final int violationCount;
   final String violationReason;
-  final FutureOr<bool> Function(String pin) verifySupervisorPin;
   final VoidCallback onContinueExam;
   final VoidCallback onEndExam;
-  final VoidCallback? onAuthorizationCancelled;
   final Future<void> Function()? onOpenTeacherMode;
 
   @override
@@ -34,25 +27,7 @@ class LockedScreen extends StatefulWidget {
 }
 
 class _LockedScreenState extends State<LockedScreen> {
-  int _failedPinAttempts = 0;
-  DateTime? _pinLockedUntil;
-
-  Future<void> _openSupervisorPin() async {
-    final verified = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => SupervisorPinScreen(
-          verifyPin: widget.verifySupervisorPin,
-          initialFailedAttempts: _failedPinAttempts,
-          initialLockedUntil: _pinLockedUntil,
-          onAttemptStateChanged: (attempts, lockedUntil) {
-            _failedPinAttempts = attempts;
-            _pinLockedUntil = lockedUntil;
-          },
-        ),
-      ),
-    );
-    if (verified != true || !mounted) return;
-
+  Future<void> _openSupervisorDecision() async {
     final decision = await Navigator.of(context).push<SupervisorDecision>(
       MaterialPageRoute<SupervisorDecision>(
         builder: (_) => SupervisorDecisionScreen(
@@ -68,8 +43,6 @@ class _LockedScreenState extends State<LockedScreen> {
       widget.onEndExam();
     } else if (decision == SupervisorDecision.openTeacherMode) {
       await widget.onOpenTeacherMode?.call();
-    } else {
-      widget.onAuthorizationCancelled?.call();
     }
   }
 
@@ -218,16 +191,19 @@ class _LockedScreenState extends State<LockedScreen> {
                       const Spacer(),
                       const SizedBox(height: 32),
                       FilledButton.icon(
-                        onPressed: _openSupervisorPin,
+                        onPressed: _openSupervisorDecision,
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(56),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
-                        icon: const Icon(Icons.lock_outline, size: 20),
+                        icon: const Icon(
+                          Icons.admin_panel_settings_outlined,
+                          size: 20,
+                        ),
                         label: const Text(
-                          'PIN Pengawas',
+                          'Panggil Pengawas',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -235,17 +211,6 @@ class _LockedScreenState extends State<LockedScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Center(
-                        child: Text(
-                          'Hanya pengawas yang boleh memasukkan PIN.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.4,
-                            color: Color(0xFF595959),
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
