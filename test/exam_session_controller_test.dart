@@ -31,4 +31,39 @@ void main() {
     expect(payload, isNot(contains('pinVerifier')));
     expect(await controller.listTeacherSessions(), hasLength(1));
   });
+
+  test('hapus sesi guru ditahan selama attempt siswa belum selesai', () async {
+    final db = await databaseFactoryFfiNoIsolate.openDatabase(
+      inMemoryDatabasePath,
+    );
+    addTearDown(db.close);
+    final controller = ExamSessionController(
+      store: await SessionStore.open(db),
+      now: DateTime.now,
+    )..attachProtectionStub(
+      screenProtectionReady: true,
+      notificationControlReady: true,
+    );
+
+    final created = await controller.createTeacherSession(
+      examName: 'Matematika Kelas XI',
+      formUrl: Uri.parse('https://docs.google.com/forms/d/e/example/viewform'),
+    );
+    expect(
+      (await controller.startStudentAttempt(created.session)).started,
+      isTrue,
+    );
+
+    final blocked = await controller.deleteTeacherSession(created.session);
+    expect(blocked.deleted, isFalse);
+    expect(blocked.error, isNotNull);
+    expect(await controller.listTeacherSessions(), hasLength(1));
+
+    await controller.finishCurrentAttempt(reason: 'Diakhiri pengawas.');
+
+    final deleted = await controller.deleteTeacherSession(created.session);
+    expect(deleted.deleted, isTrue);
+    expect(deleted.error, isNull);
+    expect(await controller.listTeacherSessions(), isEmpty);
+  });
 }

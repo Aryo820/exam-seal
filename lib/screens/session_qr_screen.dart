@@ -6,12 +6,23 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/exam_sessions.dart';
 import '../services/qr_codec.dart';
+import '../services/qr_gallery_saver.dart';
 
 /// Stitch T04 - QR publik untuk sesi yang telah lolos pemeriksaan guru.
 class SessionQrScreen extends StatefulWidget {
-  const SessionQrScreen({required this.session, super.key});
+  const SessionQrScreen({
+    required this.session,
+    this.saveQrToGallery,
+    super.key,
+  });
 
   final ExamSession session;
+
+  /// Pengganti penyimpanan ke Galeri (hanya untuk pengujian); alur produksi
+  /// memakai [saveSessionQrToGallery] dan mengarahkan siswa/guru ke Galeri
+  /// perangkat.
+  final Future<void> Function(ExamSession session, Uint8List png)?
+  saveQrToGallery;
 
   @override
   State<SessionQrScreen> createState() => _SessionQrScreenState();
@@ -20,6 +31,9 @@ class SessionQrScreen extends StatefulWidget {
 class _SessionQrScreenState extends State<SessionQrScreen> {
   bool _sharing = false;
   String? _shareError;
+  bool _saving = false;
+  String? _saveError;
+  String? _savedTo;
 
   Future<bool> _shareWithSystem(Uint8List png) async {
     final result = await SharePlus.instance.share(
@@ -52,6 +66,38 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
       }
     } finally {
       if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  /// Simpan PNG ke Galeri. Sama seperti Bagikan, tindakan ini tidak mengubah
+  /// sesi dan tidak menyatakan apa pun tentang pengiriman jawaban siswa.
+  Future<void> _saveToGallery() async {
+    if (_saving) return;
+    setState(() {
+      _saving = true;
+      _saveError = null;
+      _savedTo = null;
+    });
+    try {
+      final saver = widget.saveQrToGallery ?? saveSessionQrToGallery;
+      await saver(widget.session, await renderSessionQrPng(widget.session));
+      if (mounted) {
+        setState(
+          () => _savedTo =
+              'QR tersimpan di Galeri, album $kSessionQrAlbum. Buka aplikasi Galeri untuk mencetak atau mengirimnya.',
+        );
+      }
+    } on QrSaveFailure catch (e) {
+      if (mounted) setState(() => _saveError = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _saveError =
+              'QR tidak dapat disimpan ke Galeri pada perangkat ini. Gunakan Bagikan Gambar QR atau tampilkan QR langsung kepada siswa.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -177,6 +223,40 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                   ),
                 ),
               ],
+              if (_savedTo != null) ...[
+                const SizedBox(height: 16),
+                Semantics(
+                  liveRegion: true,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEDF7F1),
+                      border: Border(
+                        left: BorderSide(color: Color(0xFF216E4E), width: 4),
+                      ),
+                    ),
+                    child: Text(
+                      _savedTo!,
+                      style: const TextStyle(fontSize: 14, height: 1.5),
+                    ),
+                  ),
+                ),
+              ],
+              if (_saveError != null) ...[
+                const SizedBox(height: 16),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    _saveError!,
+                    style: const TextStyle(
+                      color: Color(0xFFB42318),
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 28),
               FilledButton.icon(
                 onPressed: _sharing ? null : _share,
@@ -189,6 +269,26 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                 icon: const Icon(Icons.share_outlined, size: 20),
                 label: Text(
                   _sharing ? 'Membagikan QR...' : 'Bagikan Gambar QR',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _saving ? null : _saveToGallery,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(56),
+                  foregroundColor: const Color(0xFF171717),
+                  side: const BorderSide(color: Color(0xFF171717)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                icon: const Icon(Icons.download_outlined, size: 20),
+                label: Text(
+                  _saving ? 'Menyimpan QR...' : 'Simpan QR ke Galeri',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,

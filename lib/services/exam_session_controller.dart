@@ -164,6 +164,27 @@ class ExamSessionController {
         return sessions;
       });
 
+  /// Hapus sesi guru beserta riwayat attempt lokalnya. Attempt siswa yang
+  /// belum selesai menahan penghapusan; attempt berakhir tidak, sehingga
+  /// penanda pembatasan pengulangan lokal ikut hilang dan UI wajib
+  /// memperingatkannya lebih dulu (PRD FR07/FR12).
+  Future<SessionDeletionResult> deleteTeacherSession(ExamSession session) =>
+      _withTeacherModeAccess(() async {
+        try {
+          await _requireTeacherMutationAvailable();
+          await _store.deleteSession(session.sessionId);
+          return const SessionDeletionResult(deleted: true);
+        } on StorageFailure catch (e) {
+          return SessionDeletionResult(deleted: false, error: e.message);
+        } catch (_) {
+          return const SessionDeletionResult(
+            deleted: false,
+            error:
+                'Sesi belum dapat dihapus. Periksa ruang penyimpanan lalu coba lagi.',
+          );
+        }
+      });
+
   String encodeQr(ExamSession session) => encodeSessionQr(session);
 
   ({ExamSession? session, String? error}) scanPayload(String payload) =>
@@ -616,6 +637,14 @@ class ExamSessionController {
 class TeacherSessionCreation {
   const TeacherSessionCreation({required this.session});
   final ExamSession session;
+}
+
+/// Hasil penghapusan sesi guru. [error] terisi bila sesi masih ditahan
+/// attempt siswa yang belum selesai atau penyimpanan gagal.
+class SessionDeletionResult {
+  const SessionDeletionResult({required this.deleted, this.error});
+  final bool deleted;
+  final String? error;
 }
 
 /// Jembatan proteksi yang dipakai controller. Implementasi native ada di

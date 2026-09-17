@@ -31,6 +31,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter:
     sdk: flutter
+  gal: ^2.3.3
   image_picker: ^1.2.3
   mobile_scanner: ^7.4.1
   path: ^1.9.1

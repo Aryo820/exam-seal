@@ -228,6 +228,96 @@ class SessionStore {
         return rows.isEmpty ? null : _sessionFromRow(rows.first);
       });
 
+  /// Hapus sesi guru beserta attempt, event, aksi pengawas, dan status
+  /// proteksinya dalam satu transaksi. Penghapusan ditolak selama attempt
+  /// sesi ini masih menahan (aktif, terkunci, menunggu pemulihan) atau
+  /// pemulihan proteksi perangkatnya belum selesai: menghapusnya akan
+  /// menghilangkan jejak yang dibutuhkan pemulihan OS (PRD FR12). Attempt
+  /// berakhir tidak menahan, sehingga penanda pembatasan pengulangan lokal
+  /// ikut terhapus; UI wajib memperingatkan hal itu lebih dulu (FR07).
+  /// Mengembalikan daftar attemptId yang dihapus.
+  Future<List<String>> deleteSession(String sessionId) =>
+      _guard('menghapus sesi', () async {
+        return _db.transaction((txn) async {
+          final holding = await txn.query(
+            'attempts',
+            columns: ['attempt_id'],
+            where: 'session_id = ? AND state IN (?, ?, ?)',
+            whereArgs: [
+              sessionId,
+              AttemptState.active.name,
+              AttemptState.locked.name,
+              AttemptState.recoveryPending.name,
+            ],
+            limit: 1,
+          );
+          if (holding.isNotEmpty) {
+            throw StorageFailure(
+              'Sesi ini masih menahan percobaan siswa yang belum selesai. Minta pengawas menyelesaikannya lebih dulu.',
+            );
+          }
+          final prepared = await txn.query(
+            'prepared_protection_activations',
+            columns: ['session_id'],
+            where: 'session_id = ?',
+            whereArgs: [sessionId],
+            limit: 1,
+          );
+          if (prepared.isNotEmpty) {
+            throw StorageFailure(
+              'Pemulihan proteksi perangkat untuk sesi ini belum selesai. Coba lagi setelah pemulihan berhasil.',
+            );
+          }
+          final attempts = await txn.query(
+            'attempts',
+            columns: ['attempt_id'],
+            where: 'session_id = ?',
+            whereArgs: [sessionId],
+          );
+          for (final row in attempts) {
+            final attemptId = row['attempt_id'] as String;
+            final pendingRestore = await txn.query(
+              'protection_states',
+              columns: ['attempt_id'],
+              where: 'attempt_id = ? AND restore_pending = 1',
+              whereArgs: [attemptId],
+              limit: 1,
+            );
+            if (pendingRestore.isNotEmpty) {
+              throw StorageFailure(
+                'Pemulihan proteksi perangkat untuk sesi ini belum selesai. Coba lagi setelah pemulihan berhasil.',
+              );
+            }
+            await txn.delete(
+              'session_events',
+              where: 'attempt_id = ?',
+              whereArgs: [attemptId],
+            );
+            await txn.delete(
+              'supervisor_actions',
+              where: 'attempt_id = ?',
+              whereArgs: [attemptId],
+            );
+            await txn.delete(
+              'protection_states',
+              where: 'attempt_id = ?',
+              whereArgs: [attemptId],
+            );
+          }
+          await txn.delete(
+            'attempts',
+            where: 'session_id = ?',
+            whereArgs: [sessionId],
+          );
+          await txn.delete(
+            'sessions',
+            where: 'session_id = ?',
+            whereArgs: [sessionId],
+          );
+          return attempts.map((row) => row['attempt_id'] as String).toList();
+        });
+      });
+
   ExamSession _sessionFromRow(Map<String, Object?> row) => ExamSession(
     schemaVersion: row['schema_version'] as int,
     sessionId: row['session_id'] as String,

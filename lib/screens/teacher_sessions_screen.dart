@@ -11,16 +11,24 @@ class TeacherSessionsScreen extends StatefulWidget {
   const TeacherSessionsScreen({
     this.sessions = const [],
     this.canCreateSession = true,
+    this.canDeleteSession = true,
     this.onCreateSession,
     this.onShowQr,
+    this.onDeleteSession,
     this.loadSessions,
     super.key,
   });
 
   final List<ExamSession> sessions;
   final bool canCreateSession;
+  final bool canDeleteSession;
   final FutureOr<void> Function()? onCreateSession;
   final ValueChanged<ExamSession>? onShowQr;
+
+  /// Hapus satu sesi; mengembalikan pesan kegagalan, atau null bila berhasil.
+  /// Konfirmasi dan pemuatan ulang daftar dilakukan layar ini.
+  final Future<String?> Function(ExamSession session)? onDeleteSession;
+
   final Future<List<ExamSession>> Function()? loadSessions;
 
   @override
@@ -31,6 +39,8 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
   late List<ExamSession> sessions = widget.sessions;
   bool _loading = false;
   String? _error;
+  String? _deleteError;
+  String? _deletingSessionId;
 
   @override
   void initState() {
@@ -57,6 +67,70 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _deleteSession(ExamSession session) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        icon: const Icon(Icons.delete_outline, color: Color(0xFFB42318)),
+        title: const Text('Hapus sesi ini?'),
+        content: Text(
+          'Sesi "${session.examName}", seluruh riwayat percobaan lokalnya, dan '
+          'penanda pembatasan pengulangan lokal ikut terhapus. Perangkat ini '
+          'tidak lagi mengenali percobaan lama untuk sesi tersebut. Status '
+          'berakhir bukan bukti jawaban Google Forms sudah terkirim.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB42318),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Hapus Sesi'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final callback = widget.onDeleteSession;
+    setState(() {
+      _deletingSessionId = session.sessionId;
+      _deleteError = null;
+    });
+    try {
+      final failure = callback == null ? null : await callback(session);
+      if (!mounted) return;
+      if (failure != null) {
+        setState(() => _deleteError = failure);
+        return;
+      }
+      if (widget.loadSessions == null) {
+        setState(
+          () => sessions = sessions
+              .where((item) => item.sessionId != session.sessionId)
+              .toList(),
+        );
+      } else {
+        await _load();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _deleteError =
+              'Sesi belum dapat dihapus. Periksa penyimpanan lalu coba lagi.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deletingSessionId = null);
     }
   }
 
@@ -154,6 +228,46 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
               style: TextStyle(fontSize: 13, color: Color(0xFF595959)),
             ),
           ],
+          if (_deleteError != null) ...[
+            const SizedBox(height: 20),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFEF3F2),
+                border: Border(
+                  left: BorderSide(color: Color(0xFFB42318), width: 4),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 20,
+                        color: Color(0xFFB42318),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _deleteError!,
+                          semanticsLabel: _deleteError,
+                          style: const TextStyle(fontSize: 14, height: 1.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => _deleteError = null),
+                    child: const Text('Tutup'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 32),
           Row(
             children: [
@@ -206,6 +320,10 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
             for (final session in sessions) ...[
               _SessionCard(
                 session: session,
+                deleting: _deletingSessionId == session.sessionId,
+                onDelete: widget.canDeleteSession && _deletingSessionId == null
+                    ? () => _deleteSession(session)
+                    : null,
                 onShowQr: () {
                   final callback = widget.onShowQr;
                   if (callback != null) {
@@ -228,10 +346,17 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
 }
 
 class _SessionCard extends StatelessWidget {
-  const _SessionCard({required this.session, required this.onShowQr});
+  const _SessionCard({
+    required this.session,
+    required this.onShowQr,
+    this.onDelete,
+    this.deleting = false,
+  });
 
   final ExamSession session;
   final VoidCallback onShowQr;
+  final VoidCallback? onDelete;
+  final bool deleting;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -268,6 +393,20 @@ class _SessionCard extends StatelessWidget {
           ),
           icon: const Icon(Icons.qr_code_2, size: 20),
           label: const Text('Tampilkan QR'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: onDelete,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            foregroundColor: const Color(0xFFB42318),
+            side: const BorderSide(color: Color(0xFFB42318)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          icon: const Icon(Icons.delete_outline, size: 20),
+          label: Text(deleting ? 'Menghapus...' : 'Hapus Sesi'),
         ),
         const SizedBox(height: 8),
         const Text(

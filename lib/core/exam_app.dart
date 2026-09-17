@@ -226,8 +226,13 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
         builder: (_) => TeacherSessionsScreen(
           loadSessions: controller.listTeacherSessions,
           canCreateSession: _current == null,
+          canDeleteSession: _current == null,
           onCreateSession: _openCreateSession,
           onShowQr: _openSessionQr,
+          onDeleteSession: (session) async {
+            final result = await controller.deleteTeacherSession(session);
+            return result.deleted ? null : result.error;
+          },
         ),
       ),
     );

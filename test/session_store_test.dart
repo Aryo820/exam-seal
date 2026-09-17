@@ -384,4 +384,108 @@ void main() {
     await store.saveSession(session);
     expect((await store.listSessions()).length, 1);
   });
+
+  test('delete session membersihkan attempt, event, dan aksi pengawas', () async {
+    final store = await newStore();
+    final other = ExamSession(
+      schemaVersion: 2,
+      sessionId: 'session-2',
+      sessionCode: 'BIN-1234',
+      examName: 'Bahasa Indonesia',
+      formUrl: Uri.parse('https://forms.gle/other'),
+    );
+    await store.saveSession(session);
+    await store.saveSession(other);
+    final attemptId = await store.startAttempt(session, attemptNumber: 1);
+    await store.recordEvent(
+      attemptId: attemptId,
+      eventType: 'focusLost',
+      countedAsViolation: false,
+      counterAfter: 0,
+    );
+    await store.recordSupervisorAction(
+      attemptId: attemptId,
+      actionType: 'end',
+      result: 'ended',
+    );
+    await store.setAttemptState(
+      attemptId,
+      AttemptState.ended,
+      violationCount: 0,
+    );
+    await store.setAttemptEndedAt(attemptId, DateTime.now());
+
+    expect(await store.deleteSession(session.sessionId), [attemptId]);
+
+    expect(await store.loadSession(session.sessionId), isNull);
+    expect(await store.loadAttemptsFor(session.sessionId), isEmpty);
+    // Sesi lain tidak ikut terhapus.
+    expect((await store.listSessions()).single.sessionId, 'session-2');
+    final db = openDbs.single;
+    for (final table in [
+      'session_events',
+      'supervisor_actions',
+      'protection_states',
+    ]) {
+      expect(
+        await db.query(table, where: 'attempt_id = ?', whereArgs: [attemptId]),
+        isEmpty,
+      );
+    }
+  });
+
+  test('attempt belum selesai menahan penghapusan sesi', () async {
+    final store = await newStore();
+    await store.saveSession(session);
+    await store.startAttempt(session, attemptNumber: 1);
+
+    await expectLater(
+      store.deleteSession(session.sessionId),
+      throwsA(isA<StorageFailure>()),
+    );
+
+    expect(await store.loadSession(session.sessionId), isNotNull);
+    expect(await store.loadCurrentAttempt(), isNotNull);
+  });
+
+  test('pemulihan proteksi tertunda menahan penghapusan sesi', () async {
+    final store = await newStore();
+    await store.saveSession(session);
+    final attemptId = await store.startAttempt(session, attemptNumber: 1);
+    await store.setAttemptState(
+      attemptId,
+      AttemptState.ended,
+      violationCount: 0,
+    );
+    await store.setAttemptEndedAt(attemptId, DateTime.now());
+    await store.saveProtectionState(
+      attemptId: attemptId,
+      secureWindowActive: true,
+      notificationProtectionActive: true,
+      notificationAccessGranted: true,
+      restorePending: true,
+    );
+
+    await expectLater(
+      store.deleteSession(session.sessionId),
+      throwsA(isA<StorageFailure>()),
+    );
+
+    expect(await store.loadSession(session.sessionId), isNotNull);
+    expect(await store.hasPendingRestore(), isTrue);
+  });
+
+  test('pemulihan pra-aktivasi menahan penghapusan sesi', () async {
+    final store = await newStore();
+    await store.saveSession(session);
+    await store.prepareProtectionActivation(session);
+
+    await expectLater(
+      store.deleteSession(session.sessionId),
+      throwsA(isA<StorageFailure>()),
+    );
+
+    expect(await store.loadSession(session.sessionId), isNotNull);
+    expect(await store.loadPreparedProtectionSessionId(), session.sessionId);
+  });
 }

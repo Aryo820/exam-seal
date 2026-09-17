@@ -6,9 +6,16 @@
          pengguna, bukan otomatis (PRD FR09). -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Simpan PNG QR sesi ke Galeri (paket gal). Izin lama hanya dipakai
+         Android 7.0-9; Android 10+ menyimpan lewat MediaStore tanpa izin.
+         Diminta hanya saat guru menekan Simpan QR ke Galeri. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
         android:allowBackup="false"
+        android:requestLegacyExternalStorage="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="examseal"
