@@ -345,6 +345,9 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
   );
 }
 
+/// Tindakan per sesi yang dipilih dari lembar tindakan.
+enum _SessionAction { delete }
+
 class _SessionCard extends StatelessWidget {
   const _SessionCard({
     required this.session,
@@ -355,8 +358,25 @@ class _SessionCard extends StatelessWidget {
 
   final ExamSession session;
   final VoidCallback onShowQr;
+
+  /// Null bila penghapusan sedang ditahan, misalnya percobaan siswa belum
+  /// selesai; lembar tindakan tetap terbuka dan menjelaskan penahannya.
   final VoidCallback? onDelete;
+
   final bool deleting;
+
+  Future<void> _openActions(BuildContext context) async {
+    final action = await showModalBottomSheet<_SessionAction>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
+      ),
+      builder: (_) =>
+          _SessionActionsSheet(session: session, canDelete: onDelete != null),
+    );
+    if (action == _SessionAction.delete) onDelete?.call();
+  }
 
   @override
   Widget build(BuildContext context) => Container(
@@ -367,13 +387,37 @@ class _SessionCard extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          session.examName,
-          style: const TextStyle(
-            fontSize: 18,
-            height: 1.35,
-            fontWeight: FontWeight.w700,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                session.examName,
+                style: const TextStyle(
+                  fontSize: 18,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            if (deleting)
+              const Padding(
+                padding: EdgeInsets.all(14),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              IconButton(
+                onPressed: () => _openActions(context),
+                tooltip: 'Opsi sesi',
+                color: const Color(0xFF171717),
+                icon: const Icon(Icons.more_vert_rounded),
+              ),
+          ],
         ),
         const SizedBox(height: 6),
         Text(
@@ -395,24 +439,98 @@ class _SessionCard extends StatelessWidget {
           label: const Text('Tampilkan QR'),
         ),
         const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: onDelete,
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-            foregroundColor: const Color(0xFFB42318),
-            side: const BorderSide(color: Color(0xFFB42318)),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          icon: const Icon(Icons.delete_outline, size: 20),
-          label: Text(deleting ? 'Menghapus...' : 'Hapus Sesi'),
-        ),
-        const SizedBox(height: 8),
         const Text(
           'Menampilkan QR ini tidak membuat sesi baru.',
           style: TextStyle(fontSize: 12, height: 1.4, color: Color(0xFF595959)),
         ),
+      ],
+    ),
+  );
+}
+
+/// Lembar tindakan satu sesi (ikon more_vert). Tindakan destruktif tetap
+/// meminta konfirmasi dialog setelah dipilih; lembar ini tidak mengubah
+/// sesi atau attempt.
+class _SessionActionsSheet extends StatelessWidget {
+  const _SessionActionsSheet({required this.session, required this.canDelete});
+
+  final ExamSession session;
+  final bool canDelete;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                session.examName,
+                style: const TextStyle(
+                  fontSize: 18,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Kode sesi: ${session.sessionCode}',
+                style: const TextStyle(fontSize: 14, color: Color(0xFF595959)),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: Color(0xFFD6D6D6)),
+        InkWell(
+          onTap: canDelete
+              ? () => Navigator.of(context).pop(_SessionAction.delete)
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.delete_outline_rounded,
+                  size: 22,
+                  color: canDelete
+                      ? const Color(0xFFB42318)
+                      : const Color(0xFF595959),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Hapus Sesi',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: canDelete
+                        ? const Color(0xFFB42318)
+                        : const Color(0xFF595959),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (canDelete)
+          const SizedBox(height: 8)
+        else ...[
+          const Divider(height: 1, color: Color(0xFFD6D6D6)),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 16, 24, 20),
+            child: Text(
+              'Penghapusan sesi ditahan selama percobaan siswa berlangsung.',
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.5,
+                color: Color(0xFF595959),
+              ),
+            ),
+          ),
+        ],
       ],
     ),
   );

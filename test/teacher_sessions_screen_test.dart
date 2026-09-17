@@ -38,6 +38,9 @@ void main() {
       expect(find.text('Kode sesi: MTH-7K2P'), findsOneWidget);
       expect(find.textContaining('pemantauan siswa'), findsOneWidget);
       expect(find.textContaining('siswa online'), findsNothing);
+      // Tindakan per sesi ada di lembar more_vert, bukan tombol di kartu.
+      expect(find.byIcon(Icons.more_vert_rounded), findsOneWidget);
+      expect(find.text('Hapus Sesi'), findsNothing);
 
       await tester.tap(find.text('Buat QR Ujian'));
       expect(createRequested, isTrue);
@@ -79,8 +82,17 @@ void main() {
         ),
       ),
     );
-    await tester.ensureVisible(find.text('Hapus Sesi'));
+    await tester.ensureVisible(find.byIcon(Icons.more_vert_rounded));
     await tester.pump();
+  }
+
+  /// Buka lembar tindakan sesi lalu pilih Hapus Sesi; ini menutup lembar dan
+  /// membuka dialog konfirmasi.
+  Future<void> chooseDelete(WidgetTester tester) async {
+    await tester.tap(find.byIcon(Icons.more_vert_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Hapus Sesi'));
+    await tester.pumpAndSettle();
   }
 
   testWidgets('T02 menghapus sesi hanya setelah konfirmasi', (tester) async {
@@ -93,8 +105,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.text('Hapus Sesi'));
-    await tester.pumpAndSettle();
+    await chooseDelete(tester);
     expect(find.text('Hapus sesi ini?'), findsOneWidget);
     expect(find.textContaining('pembatasan pengulangan lokal'), findsOneWidget);
 
@@ -103,8 +114,7 @@ void main() {
     expect(deleted, isEmpty);
     expect(find.text('Matematika Kelas XI'), findsOneWidget);
 
-    await tester.tap(find.text('Hapus Sesi'));
-    await tester.pumpAndSettle();
+    await chooseDelete(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Hapus Sesi'));
     await tester.pumpAndSettle();
 
@@ -123,8 +133,7 @@ void main() {
           'Sesi ini masih menahan percobaan siswa yang belum selesai.',
     );
 
-    await tester.tap(find.text('Hapus Sesi'));
-    await tester.pumpAndSettle();
+    await chooseDelete(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Hapus Sesi'));
     await tester.pumpAndSettle();
 
@@ -159,8 +168,17 @@ void main() {
         ),
       ),
     );
-    await tester.ensureVisible(find.text('Hapus Sesi'));
+    await tester.ensureVisible(find.byIcon(Icons.more_vert_rounded));
     await tester.pump();
+
+    // Lembar tindakan tetap terbuka, tetapi tindakan hapus dinonaktifkan dan
+    // menjelaskan penahannya alih-alih diam-diam gagal.
+    await tester.tap(find.byIcon(Icons.more_vert_rounded));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Penghapusan sesi ditahan selama percobaan siswa berlangsung.'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Hapus Sesi'));
     await tester.pumpAndSettle();
