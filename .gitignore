@@ -45,6 +45,9 @@ app.*.map.json
 /android/app/release
 
 /design.md
+/EVALUASI_PILOT.md
+/LAPORAN_KANDIDAT_APK.md
+/KONTEKS_KERJA.md
 /ExamSeal_PRD_MVP.md
 /PROMPT_IMPLEMENTASI_MVP.md
 /.scratch/
