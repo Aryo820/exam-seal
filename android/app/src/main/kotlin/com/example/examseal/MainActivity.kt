@@ -1,4 +1,4 @@
-package com.example.examseal
+package com.yows.examseal
 
 import android.content.Intent
 import android.os.Build

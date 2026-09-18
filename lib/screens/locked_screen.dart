@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_colors.dart';
 
 import '../models/exam_sessions.dart';
 import 'supervisor_decision_screen.dart';
@@ -62,7 +63,7 @@ class _LockedScreenState extends State<LockedScreen> {
           ),
           bottom: const PreferredSize(
             preferredSize: Size.fromHeight(1),
-            child: Divider(height: 1, color: Color(0xFFD6D6D6)),
+            child: Divider(height: 1, color: AppColors.divider),
           ),
         ),
         body: SafeArea(
@@ -90,13 +91,13 @@ class _LockedScreenState extends State<LockedScreen> {
                           text: 'Kode sesi: ',
                           style: const TextStyle(
                             fontSize: 14,
-                            color: Color(0xFF595959),
+                            color: AppColors.textSecondary,
                           ),
                           children: [
                             TextSpan(
                               text: widget.session.sessionCode,
                               style: const TextStyle(
-                                color: Color(0xFF171717),
+                                color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 0.5,
                               ),
@@ -108,13 +109,13 @@ class _LockedScreenState extends State<LockedScreen> {
                       const Divider(
                         height: 2,
                         thickness: 2,
-                        color: Color(0xFF171717),
+                        color: AppColors.ruleStrong,
                       ),
                       const SizedBox(height: 24),
                       const Icon(
                         Icons.lock_outline,
                         size: 32,
-                        color: Color(0xFFB42318),
+                        color: AppColors.danger,
                         semanticLabel: 'Ujian terkunci',
                       ),
                       const SizedBox(height: 8),
@@ -124,7 +125,7 @@ class _LockedScreenState extends State<LockedScreen> {
                           fontSize: 30,
                           height: 1.2,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFFB42318),
+                          color: AppColors.danger,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -133,7 +134,7 @@ class _LockedScreenState extends State<LockedScreen> {
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFFB42318),
+                          color: AppColors.danger,
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -147,10 +148,10 @@ class _LockedScreenState extends State<LockedScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
                             decoration: const BoxDecoration(
-                              color: Color(0xFFFEF3F2),
+                              color: AppColors.dangerSoft,
                               border: Border(
                                 left: BorderSide(
-                                  color: Color(0xFFB42318),
+                                  color: AppColors.danger,
                                   width: 4,
                                 ),
                               ),
@@ -163,7 +164,7 @@ class _LockedScreenState extends State<LockedScreen> {
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFFB42318),
+                                    color: AppColors.danger,
                                   ),
                                 ),
                                 const SizedBox(height: 8),

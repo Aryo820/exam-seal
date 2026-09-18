@@ -1,4 +1,4 @@
-package com.example.examseal
+package com.yows.examseal
 
 import android.os.Handler
 import android.os.Looper

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../utils/app_colors.dart';
 import '../models/exam_sessions.dart';
 
 /// Stitch S11 - Pengulangan sesi yang telah berakhir.
@@ -29,7 +30,7 @@ class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        icon: const Icon(Icons.replay_outlined, color: Color(0xFF216E4E)),
+        icon: const Icon(Icons.replay_outlined, color: AppColors.ready),
         title: const Text('Buat attempt baru?'),
         content: const Text(
           'Attempt baru dimulai dengan counter pelanggaran 0. Riwayat attempt sebelumnya tetap disimpan selama masa retensi.',
@@ -62,7 +63,7 @@ class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
       ),
       bottom: const PreferredSize(
         preferredSize: Size.fromHeight(1),
-        child: Divider(height: 1, color: Color(0xFFD6D6D6)),
+        child: Divider(height: 1, color: AppColors.divider),
       ),
     ),
     body: SafeArea(
@@ -89,14 +90,14 @@ class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
                     'Kode sesi: ${widget.session.sessionCode}',
                     style: const TextStyle(
                       fontSize: 14,
-                      color: Color(0xFF595959),
+                      color: AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 20),
                   const Divider(
                     height: 2,
                     thickness: 2,
-                    color: Color(0xFF171717),
+                    color: AppColors.ruleStrong,
                   ),
                   const SizedBox(height: 28),
                   const Icon(
@@ -121,7 +122,7 @@ class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
                   const SizedBox(height: 24),
                   Container(
                     width: double.infinity,
-                    color: const Color(0xFFF3F3F3),
+                    color: AppColors.surfaceSubtle,
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,7 +132,7 @@ class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF595959),
+                            color: AppColors.textSecondary,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -161,7 +162,7 @@ class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.5,
-                      color: Color(0xFF595959),
+                      color: AppColors.textSecondary,
                     ),
                   ),
                   const Spacer(),
@@ -188,8 +189,8 @@ class _RepeatSessionScreenState extends State<RepeatSessionScreen> {
                     onPressed: () => Navigator.of(context).pop(false),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(56),
-                      foregroundColor: const Color(0xFF171717),
-                      side: const BorderSide(color: Color(0xFF171717)),
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(2),
                       ),

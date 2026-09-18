@@ -8,6 +8,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/exam_sessions.dart';
 import '../services/qr_codec.dart';
 import '../services/session_store.dart' show StorageFailure;
+import '../utils/app_colors.dart';
 
 /// Adapted from Stitch S02; diagnostic prototype controls are omitted.
 class ScanQrScreen extends StatefulWidget {
@@ -165,7 +166,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                       const Divider(
                         height: 2,
                         thickness: 2,
-                        color: Color(0xFF171717),
+                        color: AppColors.ruleStrong,
                       ),
                       const SizedBox(height: 24),
                       const Text(
@@ -182,14 +183,14 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                         style: TextStyle(
                           fontSize: 16,
                           height: 1.5,
-                          color: Color(0xFF595959),
+                          color: AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 24),
                       AspectRatio(
                         aspectRatio: 1,
                         child: ColoredBox(
-                          color: const Color(0xFF171717),
+                          color: AppColors.primary,
                           child: !_supported
                               ? const Center(
                                   child: Padding(
@@ -197,7 +198,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                                     child: Text(
                                       'Pemindaian QR tersedia di aplikasi Android.',
                                       style: TextStyle(
-                                        color: Colors.white,
+                                        color: AppColors.onPrimary,
                                         fontSize: 16,
                                       ),
                                     ),
@@ -206,7 +207,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                               : _busy || _delivered
                               ? const Center(
                                   child: CircularProgressIndicator(
-                                    color: Colors.white,
+                                    color: AppColors.onPrimary,
                                     semanticsLabel: 'Membaca gambar QR',
                                   ),
                                 )
@@ -214,7 +215,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                               ? const Center(
                                   child: Icon(
                                     Icons.qr_code_2,
-                                    color: Colors.white,
+                                    color: AppColors.onPrimary,
                                     size: 64,
                                   ),
                                 )
@@ -230,7 +231,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                                             ? 'Izin kamera ditolak. Aktifkan izin kamera di pengaturan aplikasi atau pilih QR dari galeri.'
                                             : 'Kamera tidak tersedia. Gunakan QR dari galeri.',
                                         style: const TextStyle(
-                                          color: Colors.white,
+                                          color: AppColors.onPrimary,
                                           fontSize: 16,
                                           height: 1.5,
                                         ),
@@ -245,7 +246,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                                             height: constraints.maxHeight * .72,
                                             decoration: BoxDecoration(
                                               border: Border.all(
-                                                color: Colors.white,
+                                                color: AppColors.onPrimary,
                                                 width: 2,
                                               ),
                                             ),
@@ -274,7 +275,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                           'Mencari QR sesi...',
                           style: TextStyle(
                             fontSize: 14,
-                            color: Color(0xFF595959),
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       const SizedBox(height: 24),
@@ -283,7 +284,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                         style: TextStyle(
                           fontSize: 14,
                           height: 1.5,
-                          color: Color(0xFF595959),
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ],
@@ -301,7 +302,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(2),
                       ),
-                      side: const BorderSide(color: Color(0xFF737373)),
+                      side: const BorderSide(color: AppColors.inputBorder),
                     ),
                     onPressed: _busy || _delivered || !_supported
                         ? null

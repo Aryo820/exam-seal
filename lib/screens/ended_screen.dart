@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../utils/app_colors.dart';
 
 import '../models/exam_sessions.dart';
 
@@ -83,7 +84,7 @@ class _EndedScreenState extends State<EndedScreen> {
           ),
           bottom: const PreferredSize(
             preferredSize: Size.fromHeight(1),
-            child: Divider(height: 1, color: Color(0xFFD6D6D6)),
+            child: Divider(height: 1, color: AppColors.divider),
           ),
         ),
         body: SafeArea(
@@ -110,20 +111,20 @@ class _EndedScreenState extends State<EndedScreen> {
                         'Kode sesi: ${widget.session.sessionCode}',
                         style: const TextStyle(
                           fontSize: 14,
-                          color: Color(0xFF595959),
+                          color: AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 20),
                       const Divider(
                         height: 2,
                         thickness: 2,
-                        color: Color(0xFF171717),
+                        color: AppColors.ruleStrong,
                       ),
                       const SizedBox(height: 32),
                       const Icon(
                         Icons.check_circle_outline,
                         size: 36,
-                        color: Color(0xFF216E4E),
+                        color: AppColors.ready,
                         semanticLabel: 'Sesi berakhir',
                       ),
                       const SizedBox(height: 12),
@@ -138,7 +139,7 @@ class _EndedScreenState extends State<EndedScreen> {
                       const SizedBox(height: 24),
                       Container(
                         width: double.infinity,
-                        color: const Color(0xFFF3F3F3),
+                        color: AppColors.surfaceSubtle,
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,7 +149,7 @@ class _EndedScreenState extends State<EndedScreen> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF595959),
+                                color: AppColors.textSecondary,
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -168,7 +169,7 @@ class _EndedScreenState extends State<EndedScreen> {
                         style: TextStyle(
                           fontSize: 14,
                           height: 1.5,
-                          color: Color(0xFF595959),
+                          color: AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -179,13 +180,13 @@ class _EndedScreenState extends State<EndedScreen> {
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: _settingsRestored
-                                ? const Color(0xFFEDF7F1)
-                                : const Color(0xFFFFF4DF),
+                                ? AppColors.readySoft
+                                : AppColors.warningSoft,
                             border: Border(
                               left: BorderSide(
                                 color: _settingsRestored
-                                    ? const Color(0xFF216E4E)
-                                    : const Color(0xFF8A4B08),
+                                    ? AppColors.ready
+                                    : AppColors.warning,
                                 width: 4,
                               ),
                             ),
@@ -198,8 +199,8 @@ class _EndedScreenState extends State<EndedScreen> {
                                     ? Icons.settings_backup_restore
                                     : Icons.warning_amber_outlined,
                                 color: _settingsRestored
-                                    ? const Color(0xFF216E4E)
-                                    : const Color(0xFF8A4B08),
+                                    ? AppColors.ready
+                                    : AppColors.warning,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -241,7 +242,7 @@ class _EndedScreenState extends State<EndedScreen> {
                             style: const TextStyle(
                               fontSize: 14,
                               height: 1.5,
-                              color: Color(0xFFB42318),
+                              color: AppColors.danger,
                             ),
                           ),
                         ],

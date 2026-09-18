@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/exam_sessions.dart';
 import '../services/exam_session_controller.dart';
+import '../utils/app_colors.dart';
 
 /// Stitch S03 - Persiapan Ujian.
 class PreExamScreen extends StatefulWidget {
@@ -127,7 +128,7 @@ class _PreExamScreenState extends State<PreExamScreen>
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF595959),
+                color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 4),
@@ -141,14 +142,14 @@ class _PreExamScreenState extends State<PreExamScreen>
               ),
             ),
             const SizedBox(height: 16),
-            const Divider(height: 2, thickness: 2, color: Color(0xFF171717)),
+            const Divider(height: 2, thickness: 2, color: AppColors.ruleStrong),
             const SizedBox(height: 16),
             const Text(
               'Cocokkan nama ujian dan kode ini dengan layar guru sebelum melanjutkan.',
               style: TextStyle(
                 fontSize: 16,
                 height: 1.5,
-                color: Color(0xFF595959),
+                color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 32),
@@ -214,12 +215,12 @@ class _PreExamScreenState extends State<PreExamScreen>
             ),
             const SizedBox(height: 16),
             Container(
-              color: const Color(0xFFFEF3F2),
+              color: AppColors.dangerSoft,
               padding: const EdgeInsets.all(16),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.error_outline, color: Color(0xFFB42318)),
+                  const Icon(Icons.error_outline, color: AppColors.danger),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -287,7 +288,7 @@ class _PreExamScreenState extends State<PreExamScreen>
                   style: const TextStyle(
                     fontSize: 14,
                     height: 1.5,
-                    color: Color(0xFFB42318),
+                    color: AppColors.danger,
                   ),
                 ),
               ),
@@ -299,7 +300,7 @@ class _PreExamScreenState extends State<PreExamScreen>
               style: TextStyle(
                 fontSize: 14,
                 height: 1.5,
-                color: Color(0xFF595959),
+                color: AppColors.textSecondary,
               ),
             ),
           ],
@@ -328,13 +329,13 @@ class _ReadinessRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = ready ? const Color(0xFF216E4E) : const Color(0xFFB42318);
+    final color = ready ? AppColors.ready : AppColors.danger;
     final action = onActionLabel != null && onAction != null;
     return Container(
       constraints: const BoxConstraints(minHeight: 64),
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFD6D6D6))),
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

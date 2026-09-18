@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../utils/app_colors.dart';
 import '../widgets/restricted_form_view.dart';
 
 import '../models/exam_sessions.dart';
@@ -418,8 +419,8 @@ class _Header extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.fromLTRB(24, 12, 24, 10),
     decoration: const BoxDecoration(
-      color: Colors.white,
-      border: Border(bottom: BorderSide(color: Color(0xFF171717), width: 2)),
+      color: AppColors.surface,
+      border: Border(bottom: BorderSide(color: AppColors.ruleStrong, width: 2)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -474,7 +475,7 @@ class _ViolationWarning extends StatelessWidget {
   Widget build(BuildContext context) {
     final lastWarning = count == 2;
     return ColoredBox(
-      color: const Color(0x99000000),
+      color: AppColors.scrim,
       child: Center(
         child: Semantics(
           container: true,
@@ -487,8 +488,8 @@ class _ViolationWarning extends StatelessWidget {
             margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: const Color(0xFF8A4B08)),
+              color: AppColors.surface,
+              border: Border.all(color: AppColors.warning),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Column(
@@ -499,7 +500,7 @@ class _ViolationWarning extends StatelessWidget {
                   children: [
                     const Icon(
                       Icons.warning_amber_outlined,
-                      color: Color(0xFF8A4B08),
+                      color: AppColors.warning,
                       semanticLabel: 'Peringatan',
                     ),
                     const SizedBox(width: 10),
@@ -509,7 +510,7 @@ class _ViolationWarning extends StatelessWidget {
                             ? 'Peringatan terakhir'
                             : 'Peringatan pertama',
                         style: const TextStyle(
-                          color: Color(0xFF8A4B08),
+                          color: AppColors.warning,
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
                         ),
@@ -531,13 +532,13 @@ class _ViolationWarning extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     height: 1.4,
-                    color: Color(0xFF595959),
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 16),
                 Container(
                   width: double.infinity,
-                  color: const Color(0xFFFFF4DF),
+                  color: AppColors.warningSoft,
                   padding: const EdgeInsets.all(12),
                   child: Text(
                     lastWarning
@@ -552,7 +553,7 @@ class _ViolationWarning extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     height: 1.4,
-                    color: Color(0xFF595959),
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -587,8 +588,8 @@ class _CompletionAction extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
     decoration: const BoxDecoration(
-      color: Colors.white,
-      border: Border(top: BorderSide(color: Color(0xFFD6D6D6))),
+      color: AppColors.surface,
+      border: Border(top: BorderSide(color: AppColors.divider)),
     ),
     child: Column(
       children: [
@@ -596,8 +597,8 @@ class _CompletionAction extends StatelessWidget {
           onPressed: onPressed,
           style: OutlinedButton.styleFrom(
             minimumSize: const Size.fromHeight(56),
-            foregroundColor: const Color(0xFF171717),
-            side: const BorderSide(color: Color(0xFF171717)),
+            foregroundColor: AppColors.primary,
+            side: const BorderSide(color: AppColors.primary),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(2),
             ),
@@ -613,7 +614,7 @@ class _CompletionAction extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             height: 1.35,
-            color: Color(0xFF595959),
+            color: AppColors.textSecondary,
           ),
         ),
       ],

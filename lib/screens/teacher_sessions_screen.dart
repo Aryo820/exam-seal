@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../utils/app_colors.dart';
 import '../models/exam_sessions.dart';
 import 'create_session_screen.dart';
 import 'session_qr_screen.dart';
@@ -75,7 +76,7 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        icon: const Icon(Icons.delete_outline, color: Color(0xFFB42318)),
+        icon: const Icon(Icons.delete_outline, color: AppColors.danger),
         title: const Text('Hapus sesi ini?'),
         content: Text(
           'Sesi "${session.examName}", seluruh riwayat percobaan lokalnya, dan '
@@ -91,8 +92,8 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB42318),
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.danger,
+              foregroundColor: AppColors.onPrimary,
             ),
             child: const Text('Hapus Sesi'),
           ),
@@ -155,7 +156,7 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
       ),
       bottom: const PreferredSize(
         preferredSize: Size.fromHeight(1),
-        child: Divider(height: 1, color: Color(0xFFD6D6D6)),
+        child: Divider(height: 1, color: AppColors.divider),
       ),
     ),
     body: SafeArea(
@@ -177,7 +178,7 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
             style: TextStyle(
               fontSize: 16,
               height: 1.5,
-              color: Color(0xFF595959),
+              color: AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: 20),
@@ -185,9 +186,9 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: const BoxDecoration(
-              color: Color(0xFFF3F3F3),
+              color: AppColors.surfaceSubtle,
               border: Border(
-                left: BorderSide(color: Color(0xFF171717), width: 4),
+                left: BorderSide(color: AppColors.primary, width: 4),
               ),
             ),
             child: const Row(
@@ -225,7 +226,7 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
             const SizedBox(height: 12),
             const Text(
               'Perubahan sesi ditahan selama percobaan siswa berlangsung.',
-              style: TextStyle(fontSize: 13, color: Color(0xFF595959)),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
           ],
           if (_deleteError != null) ...[
@@ -234,9 +235,9 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: const BoxDecoration(
-                color: Color(0xFFFEF3F2),
+                color: AppColors.dangerSoft,
                 border: Border(
-                  left: BorderSide(color: Color(0xFFB42318), width: 4),
+                  left: BorderSide(color: AppColors.danger, width: 4),
                 ),
               ),
               child: Column(
@@ -248,7 +249,7 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
                       const Icon(
                         Icons.error_outline,
                         size: 20,
-                        color: Color(0xFFB42318),
+                        color: AppColors.danger,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -279,7 +280,7 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
               ),
               Text(
                 '${sessions.length} sesi',
-                style: const TextStyle(fontSize: 13, color: Color(0xFF595959)),
+                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -293,7 +294,7 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFD6D6D6)),
+                border: Border.all(color: AppColors.divider),
               ),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,7 +311,7 @@ class _TeacherSessionsScreenState extends State<TeacherSessionsScreen> {
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.5,
-                      color: Color(0xFF595959),
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
@@ -368,7 +369,7 @@ class _SessionCard extends StatelessWidget {
   Future<void> _openActions(BuildContext context) async {
     final action = await showModalBottomSheet<_SessionAction>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
       ),
@@ -382,7 +383,7 @@ class _SessionCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      border: Border.all(color: const Color(0xFF737373)),
+      border: Border.all(color: AppColors.inputBorder),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -414,7 +415,7 @@ class _SessionCard extends StatelessWidget {
               IconButton(
                 onPressed: () => _openActions(context),
                 tooltip: 'Opsi sesi',
-                color: const Color(0xFF171717),
+                color: AppColors.textPrimary,
                 icon: const Icon(Icons.more_vert_rounded),
               ),
           ],
@@ -422,15 +423,15 @@ class _SessionCard extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           'Kode sesi: ${session.sessionCode}',
-          style: const TextStyle(fontSize: 14, color: Color(0xFF595959)),
+          style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 16),
         OutlinedButton.icon(
           onPressed: onShowQr,
           style: OutlinedButton.styleFrom(
             minimumSize: const Size.fromHeight(48),
-            foregroundColor: const Color(0xFF171717),
-            side: const BorderSide(color: Color(0xFF171717)),
+            foregroundColor: AppColors.primary,
+            side: const BorderSide(color: AppColors.primary),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(2),
             ),
@@ -441,7 +442,7 @@ class _SessionCard extends StatelessWidget {
         const SizedBox(height: 8),
         const Text(
           'Menampilkan QR ini tidak membuat sesi baru.',
-          style: TextStyle(fontSize: 12, height: 1.4, color: Color(0xFF595959)),
+          style: TextStyle(fontSize: 12, height: 1.4, color: AppColors.textSecondary),
         ),
       ],
     ),
@@ -479,12 +480,12 @@ class _SessionActionsSheet extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 'Kode sesi: ${session.sessionCode}',
-                style: const TextStyle(fontSize: 14, color: Color(0xFF595959)),
+                style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
               ),
             ],
           ),
         ),
-        const Divider(height: 1, color: Color(0xFFD6D6D6)),
+        const Divider(height: 1, color: AppColors.divider),
         InkWell(
           onTap: canDelete
               ? () => Navigator.of(context).pop(_SessionAction.delete)
@@ -497,8 +498,8 @@ class _SessionActionsSheet extends StatelessWidget {
                   Icons.delete_outline_rounded,
                   size: 22,
                   color: canDelete
-                      ? const Color(0xFFB42318)
-                      : const Color(0xFF595959),
+                      ? AppColors.danger
+                      : AppColors.textSecondary,
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -507,8 +508,8 @@ class _SessionActionsSheet extends StatelessWidget {
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: canDelete
-                        ? const Color(0xFFB42318)
-                        : const Color(0xFF595959),
+                        ? AppColors.danger
+                        : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -518,7 +519,7 @@ class _SessionActionsSheet extends StatelessWidget {
         if (canDelete)
           const SizedBox(height: 8)
         else ...[
-          const Divider(height: 1, color: Color(0xFFD6D6D6)),
+          const Divider(height: 1, color: AppColors.divider),
           const Padding(
             padding: EdgeInsets.fromLTRB(24, 16, 24, 20),
             child: Text(
@@ -526,7 +527,7 @@ class _SessionActionsSheet extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 height: 1.5,
-                color: Color(0xFF595959),
+                color: AppColors.textSecondary,
               ),
             ),
           ),

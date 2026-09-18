@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../utils/app_colors.dart';
 import '../models/exam_sessions.dart';
 import 'supervisor_decision_screen.dart';
 
@@ -64,7 +65,7 @@ class _ProcessRecoveryScreenState extends State<ProcessRecoveryScreen> {
         ),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFD6D6D6)),
+          child: Divider(height: 1, color: AppColors.divider),
         ),
       ),
       body: SafeArea(
@@ -91,20 +92,20 @@ class _ProcessRecoveryScreenState extends State<ProcessRecoveryScreen> {
                       'Kode sesi: ${widget.session.sessionCode}',
                       style: const TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF595959),
+                        color: AppColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 20),
                     const Divider(
                       height: 2,
                       thickness: 2,
-                      color: Color(0xFF171717),
+                      color: AppColors.ruleStrong,
                     ),
                     const SizedBox(height: 24),
                     const Icon(
                       Icons.restart_alt,
                       size: 36,
-                      color: Color(0xFF8A4B08),
+                      color: AppColors.warning,
                       semanticLabel: 'Sesi perlu diperiksa',
                     ),
                     const SizedBox(height: 8),
@@ -129,9 +130,9 @@ class _ProcessRecoveryScreenState extends State<ProcessRecoveryScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: const BoxDecoration(
-                        color: Color(0xFFFFF4DF),
+                        color: AppColors.warningSoft,
                         border: Border(
-                          left: BorderSide(color: Color(0xFF8A4B08), width: 4),
+                          left: BorderSide(color: AppColors.warning, width: 4),
                         ),
                       ),
                       child: const Text(
@@ -183,7 +184,7 @@ class _ProcessRecoveryScreenState extends State<ProcessRecoveryScreen> {
                         style: TextStyle(
                           fontSize: 13,
                           height: 1.4,
-                          color: Color(0xFF595959),
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ),

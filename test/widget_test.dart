@@ -3,6 +3,7 @@ import 'package:examseal/main.dart' show ExamSealRoot;
 import 'package:examseal/services/exam_session_controller.dart';
 import 'package:examseal/services/session_store.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -34,8 +35,9 @@ void main() {
 
     await tester.pumpWidget(ExamSealRoot(controller: controller));
 
-    final wordmark = find.text('ExamSeal');
-    expect(wordmark, findsOneWidget);
+    final logo = find.byType(Image);
+    expect(logo, findsOneWidget);
+    await rootBundle.load('assets/images/exam.png');
     expect(
       Theme.of(tester.element(find.byType(Scaffold))).scaffoldBackgroundColor,
       Colors.white,

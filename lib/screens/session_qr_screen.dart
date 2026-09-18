@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/exam_sessions.dart';
 import '../services/qr_codec.dart';
 import '../services/qr_gallery_saver.dart';
+import '../utils/app_colors.dart';
 
 /// Stitch T04 - QR publik untuk sesi yang telah lolos pemeriksaan guru.
 class SessionQrScreen extends StatefulWidget {
@@ -112,7 +113,7 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
         ),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFD6D6D6)),
+          child: Divider(height: 1, color: AppColors.divider),
         ),
       ),
       body: SafeArea(
@@ -136,7 +137,7 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                 style: TextStyle(
                   fontSize: 16,
                   height: 1.5,
-                  color: Color(0xFF595959),
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 24),
@@ -154,7 +155,7 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF595959),
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 2),
@@ -167,7 +168,7 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              const Divider(height: 2, thickness: 2, color: Color(0xFF171717)),
+              const Divider(height: 2, thickness: 2, color: AppColors.ruleStrong),
               const SizedBox(height: 24),
               Center(
                 child: Semantics(
@@ -199,9 +200,9 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: const BoxDecoration(
-                  color: Color(0xFFF3F3F3),
+                  color: AppColors.surfaceSubtle,
                   border: Border(
-                    left: BorderSide(color: Color(0xFF171717), width: 4),
+                    left: BorderSide(color: AppColors.primary, width: 4),
                   ),
                 ),
                 child: const Text(
@@ -216,7 +217,7 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                   child: Text(
                     _shareError!,
                     style: const TextStyle(
-                      color: Color(0xFFB42318),
+                      color: AppColors.danger,
                       fontSize: 14,
                       height: 1.5,
                     ),
@@ -231,9 +232,9 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: const BoxDecoration(
-                      color: Color(0xFFEDF7F1),
+                      color: AppColors.readySoft,
                       border: Border(
-                        left: BorderSide(color: Color(0xFF216E4E), width: 4),
+                        left: BorderSide(color: AppColors.ready, width: 4),
                       ),
                     ),
                     child: Text(
@@ -250,7 +251,7 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                   child: Text(
                     _saveError!,
                     style: const TextStyle(
-                      color: Color(0xFFB42318),
+                      color: AppColors.danger,
                       fontSize: 14,
                       height: 1.5,
                     ),
@@ -280,8 +281,8 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                 onPressed: _saving ? null : _saveToGallery,
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(56),
-                  foregroundColor: const Color(0xFF171717),
-                  side: const BorderSide(color: Color(0xFF171717)),
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(2),
                   ),
@@ -300,8 +301,8 @@ class _SessionQrScreenState extends State<SessionQrScreen> {
                 onPressed: () => Navigator.of(context).pop(),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(56),
-                  foregroundColor: const Color(0xFF171717),
-                  side: const BorderSide(color: Color(0xFF171717)),
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(2),
                   ),

@@ -3,10 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/exam_sessions.dart';
-import '../services/attempt_state_machine.dart';
-import '../services/exam_session_controller.dart';
-import '../services/exam_protection.dart';
-import '../services/session_store.dart';
 import '../screens/boot_screen.dart' show SplashPlaceholder;
 import '../screens/create_session_screen.dart';
 import '../screens/ended_screen.dart';
@@ -19,6 +15,11 @@ import '../screens/repeat_session_screen.dart';
 import '../screens/scan_qr_screen.dart';
 import '../screens/session_qr_screen.dart';
 import '../screens/teacher_sessions_screen.dart';
+import '../services/attempt_state_machine.dart';
+import '../services/exam_protection.dart';
+import '../services/exam_session_controller.dart';
+import '../services/session_store.dart';
+import '../utils/app_colors.dart';
 
 /// Composition root sederhana: satu widget tingkat atas yang memiliki
 /// [ExamSessionController] dan merutekan screen sesuai state attempt.
@@ -612,16 +613,12 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
   );
 
   static final ThemeData _theme = ThemeData(
-    scaffoldBackgroundColor: Colors.white,
+    scaffoldBackgroundColor: AppColors.background,
     fontFamily: 'Roboto',
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xFF171717),
-      primary: const Color(0xFF171717),
-      surface: Colors.white,
-    ),
+    colorScheme: AppColors.lightScheme,
     appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.white,
-      foregroundColor: Color(0xFF171717),
+      backgroundColor: AppColors.surface,
+      foregroundColor: AppColors.textPrimary,
       surfaceTintColor: Colors.transparent,
     ),
   );

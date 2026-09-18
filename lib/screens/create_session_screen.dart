@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../utils/app_colors.dart';
 import '../services/form_url_policy.dart';
 
 /// Stitch T02 - Data awal untuk membuat sesi guru.
@@ -103,7 +104,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         ),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFD6D6D6)),
+          child: Divider(height: 1, color: AppColors.divider),
         ),
       ),
       body: SafeArea(
@@ -129,14 +130,14 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                   style: TextStyle(
                     fontSize: 16,
                     height: 1.5,
-                    color: Color(0xFF595959),
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 20),
                 const Divider(
                   height: 2,
                   thickness: 2,
-                  color: Color(0xFF171717),
+                  color: AppColors.ruleStrong,
                 ),
                 const SizedBox(height: 28),
                 TextFormField(
@@ -176,9 +177,9 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: const BoxDecoration(
-                    color: Color(0xFFFFF4DF),
+                    color: AppColors.warningSoft,
                     border: Border(
-                      left: BorderSide(color: Color(0xFF8A4B08), width: 4),
+                      left: BorderSide(color: AppColors.warning, width: 4),
                     ),
                   ),
                   child: const Column(
@@ -214,7 +215,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                       style: const TextStyle(
                         fontSize: 14,
                         height: 1.5,
-                        color: Color(0xFFB42318),
+                        color: AppColors.danger,
                       ),
                     ),
                   ),
@@ -233,7 +234,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                           dimension: 22,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: AppColors.onPrimary,
                           ),
                         )
                       : const Text(

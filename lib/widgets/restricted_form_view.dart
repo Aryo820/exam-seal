@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../utils/app_colors.dart';
 import '../services/attempt_state_machine.dart';
 import '../services/form_url_policy.dart';
 
@@ -79,7 +80,7 @@ class _RestrictedFormViewState extends State<RestrictedFormView> {
     try {
       final controller = WebViewController();
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-      await controller.setBackgroundColor(Colors.white);
+      await controller.setBackgroundColor(AppColors.surface);
       await controller.addJavaScriptChannel(
         'ExamSealForm',
         onMessageReceived: (message) {

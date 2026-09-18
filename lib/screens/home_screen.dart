@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../utils/app_colors.dart';
 import 'scan_qr_screen.dart';
 import 'teacher_sessions_screen.dart';
 
@@ -29,7 +30,7 @@ class HomeScreen extends StatelessWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
-            const Divider(height: 2, thickness: 2, color: Color(0xFF171717)),
+            const Divider(height: 2, thickness: 2, color: AppColors.ruleStrong),
             const SizedBox(height: 48),
             const Text(
               'Pilih mode',
@@ -41,7 +42,7 @@ class HomeScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 16,
                 height: 1.5,
-                color: Color(0xFF595959),
+                color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 32),
@@ -61,14 +62,14 @@ class HomeScreen extends StatelessWidget {
               false,
             ),
             const SizedBox(height: 32),
-            const Divider(color: Color(0xFFD6D6D6)),
+            const Divider(color: AppColors.divider),
             const SizedBox(height: 16),
             const Text(
               'Ujian Google Forms dengan pengawasan langsung di kelas.',
               style: TextStyle(
                 fontSize: 14,
                 height: 1.5,
-                color: Color(0xFF595959),
+                color: AppColors.textSecondary,
               ),
             ),
           ],
@@ -84,13 +85,13 @@ class HomeScreen extends StatelessWidget {
     IconData icon,
     bool student,
   ) {
-    final foreground = student ? Colors.white : const Color(0xFF171717);
+    final foreground = student ? AppColors.onPrimary : AppColors.primary;
     return OutlinedButton(
       style: OutlinedButton.styleFrom(
-        backgroundColor: student ? const Color(0xFF171717) : Colors.white,
+        backgroundColor: student ? AppColors.primary : AppColors.surface,
         foregroundColor: foreground,
         padding: const EdgeInsets.all(24),
-        side: const BorderSide(color: Color(0xFF737373)),
+        side: const BorderSide(color: AppColors.inputBorder),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
         alignment: Alignment.centerLeft,
       ),
@@ -142,7 +143,7 @@ class HomeScreen extends StatelessWidget {
       barrierDismissible: false,
       builder: (dialogContext) => Dialog(
         shape: RoundedRectangleBorder(
-          side: const BorderSide(color: Color(0xFF737373)),
+          side: const BorderSide(color: AppColors.inputBorder),
           borderRadius: BorderRadius.circular(4),
         ),
         child: SingleChildScrollView(
@@ -175,7 +176,7 @@ class HomeScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   height: 1.5,
-                  color: Color(0xFF595959),
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 24),

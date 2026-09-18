@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_colors.dart';
 
 import '../models/exam_sessions.dart';
 
@@ -32,7 +33,7 @@ class SupervisorDecisionScreen extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         icon: const Icon(
           Icons.warning_amber_outlined,
-          color: Color(0xFFB42318),
+          color: AppColors.danger,
         ),
         title: const Text('Akhiri ujian?'),
         content: const Text(
@@ -46,8 +47,8 @@ class SupervisorDecisionScreen extends StatelessWidget {
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB42318),
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.danger,
+              foregroundColor: AppColors.onPrimary,
             ),
             child: const Text('Akhiri Ujian'),
           ),
@@ -69,7 +70,7 @@ class SupervisorDecisionScreen extends StatelessWidget {
         ),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFD6D6D6)),
+          child: Divider(height: 1, color: AppColors.divider),
         ),
       ),
       body: SafeArea(
@@ -97,13 +98,13 @@ class SupervisorDecisionScreen extends StatelessWidget {
                         text: 'Kode sesi: ',
                         style: const TextStyle(
                           fontSize: 14,
-                          color: Color(0xFF595959),
+                          color: AppColors.textSecondary,
                         ),
                         children: [
                           TextSpan(
                             text: session.sessionCode,
                             style: const TextStyle(
-                              color: Color(0xFF171717),
+                              color: AppColors.textPrimary,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.5,
                             ),
@@ -115,19 +116,19 @@ class SupervisorDecisionScreen extends StatelessWidget {
                     const Divider(
                       height: 2,
                       thickness: 2,
-                      color: Color(0xFF171717),
+                      color: AppColors.ruleStrong,
                     ),
                     const SizedBox(height: 24),
                     Container(
                       width: double.infinity,
-                      color: const Color(0xFFEDF7F1),
+                      color: AppColors.readySoft,
                       padding: const EdgeInsets.all(16),
                       child: const Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(
                             Icons.verified_user_outlined,
-                            color: Color(0xFF216E4E),
+                            color: AppColors.ready,
                             semanticLabel: 'Konfirmasi pengawas',
                           ),
                           SizedBox(width: 12),
@@ -164,9 +165,9 @@ class SupervisorDecisionScreen extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: const BoxDecoration(
-                        color: Color(0xFFFFF4DF),
+                        color: AppColors.warningSoft,
                         border: Border(
-                          left: BorderSide(color: Color(0xFF8A4B08), width: 4),
+                          left: BorderSide(color: AppColors.warning, width: 4),
                         ),
                       ),
                       child: Text(
@@ -200,8 +201,8 @@ class SupervisorDecisionScreen extends StatelessWidget {
                       onPressed: () => _confirmEndExam(context),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(56),
-                        foregroundColor: const Color(0xFFB42318),
-                        side: const BorderSide(color: Color(0xFFB42318)),
+                        foregroundColor: AppColors.danger,
+                        side: const BorderSide(color: AppColors.danger),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(2),
                         ),
@@ -237,14 +238,14 @@ class _SummaryRow extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.symmetric(vertical: 12),
     decoration: const BoxDecoration(
-      border: Border(bottom: BorderSide(color: Color(0xFFD6D6D6))),
+      border: Border(bottom: BorderSide(color: AppColors.divider)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 13, color: Color(0xFF595959)),
+          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 4),
         Text(

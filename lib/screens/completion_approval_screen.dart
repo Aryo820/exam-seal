@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_colors.dart';
 
 import '../models/exam_sessions.dart';
 
@@ -27,7 +28,7 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         icon: const Icon(
           Icons.warning_amber_outlined,
-          color: Color(0xFFB42318),
+          color: AppColors.danger,
         ),
         title: const Text('Akhiri ujian?'),
         content: const Text(
@@ -41,8 +42,8 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB42318),
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.danger,
+              foregroundColor: AppColors.onPrimary,
             ),
             child: const Text('Akhiri Ujian'),
           ),
@@ -62,7 +63,7 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
         ),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFD6D6D6)),
+          child: Divider(height: 1, color: AppColors.divider),
         ),
       ),
       body: SafeArea(
@@ -89,7 +90,7 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
                       'Kode sesi: ${widget.session.sessionCode}',
                       style: const TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF595959),
+                        color: AppColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -104,7 +105,7 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
                     const Divider(
                       height: 2,
                       thickness: 2,
-                      color: Color(0xFF171717),
+                      color: AppColors.ruleStrong,
                     ),
                     const SizedBox(height: 32),
                     const Icon(
@@ -131,9 +132,9 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: const BoxDecoration(
-                        color: Color(0xFFFFF4DF),
+                        color: AppColors.warningSoft,
                         border: Border(
-                          left: BorderSide(color: Color(0xFF8A4B08), width: 4),
+                          left: BorderSide(color: AppColors.warning, width: 4),
                         ),
                       ),
                       child: const Row(
@@ -141,7 +142,7 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
                         children: [
                           Icon(
                             Icons.info_outline,
-                            color: Color(0xFF8A4B08),
+                            color: AppColors.warning,
                             semanticLabel: 'Informasi penting',
                           ),
                           SizedBox(width: 12),
@@ -178,8 +179,8 @@ class _CompletionApprovalScreenState extends State<CompletionApprovalScreen> {
                       onPressed: () => Navigator.of(context).pop(false),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(56),
-                        foregroundColor: const Color(0xFF171717),
-                        side: const BorderSide(color: Color(0xFF171717)),
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(2),
                         ),

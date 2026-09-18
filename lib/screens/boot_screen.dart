@@ -62,7 +62,7 @@ class _BootScreenState extends State<BootScreen> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer(const Duration(seconds: 1), () {
+    _timer = Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
