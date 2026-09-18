@@ -9,19 +9,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 
 /**
- * Peringatan native ExamSeal: getar + nada (PRD FR10).
- *
- * Batasan jujur yang ditegakkan di sini:
- * - Durasi dibatasi maksimal 2000ms per panggilan (FR10: singkat, tanpa
- *   pengulangan terus-menerus).
- * - Volume maksimum TIDAK dijamin: vendor/Android bisa menolak perubahan.
- *   Kegagalan dilaporkan sebagai false, bukan crash.
- * - Volume pengguna SELALU dipulihkan (termasuk saat gagal dan saat
- *   [release]), agar tidak ada volume yang tertinggal berubah.
- * - Perangkat tanpa vibrator: getar mengembalikan false dengan aman.
- *
- * Tidak ada aturan bisnis ujian di sini (tidak ada counter/strike):
- * kapan memperingatkan diputuskan Flutter.
+ * Getar + nada (FR10, maks 3000ms). Volume tak dijamin vendor; selalu dipulihkan. Tanpa counter ujian.
  */
 class WarningManager(context: Context) {
 
@@ -55,11 +43,7 @@ class WarningManager(context: Context) {
 
     private var sounding = false
 
-    /**
-     * Getarkan peringatan sekali, maksimal [MAX_ALERT_MS]. Izin VIBRATE
-     * sudah dideklarasikan di manifest (normal permission). False bila
-     * perangkat tidak bisa bergetar — bukan error fatal.
-     */
+    /** Izin VIBRATE sudah di manifest. False berarti tak bisa getar, bukan fatal. */
     fun vibrateWarning(durationMs: Long): Boolean {
         val capped = durationMs.coerceIn(1L, MAX_ALERT_MS)
         return try {
@@ -84,30 +68,20 @@ class WarningManager(context: Context) {
         }
     }
 
-    /**
-     * Bunyikan nada peringatan: simpan volume → coba naikkan ke maksimum
-     * yang diizinkan → bunyi → (pemulihan dilakukan di [stopWarningSound]
-     * atau otomatis oleh pemanggil setelah selesai).
-     *
-     * Mengembalikan false bila nada tidak bisa dibunyikan; volume yang
-     * sempat diubah tetap dipulihkan sebelum returning false.
-     */
+    /** Simpan volume, coba maksimum best-effort, bunyi; pulih di stop. Gagal tetap pulihkan volume. */
     fun playWarningSound(durationMs: Long): Boolean {
         val capped = durationMs.coerceIn(1L, MAX_ALERT_MS).toInt()
         synchronized(lock) {
             if (sounding) return true
             return try {
                 val manager = audioManager
-                // Simpan volume pengguna SEBELUM mengubah apa pun.
                 savedVolume = manager.getStreamVolume(AudioManager.STREAM_MUSIC)
                 val max = manager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                 // Best-effort: vendor boleh menolak; jangan gagal karenanya.
                 try {
                     manager.setStreamVolume(AudioManager.STREAM_MUSIC, max, 0)
                 } catch (_: SecurityException) {
-                    // Lanjut dengan volume apa adanya.
                 } catch (_: RuntimeException) {
-                    // Lanjut dengan volume apa adanya.
                 }
                 val generator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
                 toneGenerator = generator
@@ -124,10 +98,7 @@ class WarningManager(context: Context) {
         }
     }
 
-    /**
-     * Hentikan nada (bila berbunyi) dan pulihkan volume pengguna.
-     * Idempoten: aman dipanggil berulang atau saat tidak berbunyi.
-     */
+    /** Hentikan nada dan pulihkan volume. Idempoten. */
     fun stopWarningSound(): Boolean {
         synchronized(lock) {
             return try {
@@ -151,11 +122,7 @@ class WarningManager(context: Context) {
     /** True bila nada peringatan sedang berbunyi. */
     fun isSounding(): Boolean = synchronized(lock) { sounding }
 
-    /**
-     * Lepaskan semua resource native. Wajib dipanggil saat activity/engine
-     * dihancurkan agar tidak ada MediaPlayer/ToneGenerator gantung dan
-     * tidak ada volume yang tertinggal berubah.
-     */
+    /** Wajib saat activity/engine hancur agar nada/volume tidak tertinggal. */
     fun release() {
         stopWarningSound()
     }
@@ -183,14 +150,10 @@ class WarningManager(context: Context) {
     }
 
     companion object {
-        /** FR10: bunyi/getar singkat maksimal dua detik per pelanggaran. */
-        const val MAX_ALERT_MS = 2000L
+        /** FR10: bunyi/getar singkat maksimal tiga detik per pelanggaran. */
+        const val MAX_ALERT_MS = 3000L
 
-        /**
-         * Nada peringatan. Fondasi V1 memakai ToneGenerator bawaan agar
-         * tanpa file aset; dapat diganti file nada khusus tanpa mengubah
-         * kontrak channel.
-         */
+        /** ToneGenerator bawaan agar tanpa aset; ganti nada tanpa ubah kontrak channel. */
         private const val TONE = ToneGenerator.TONE_CDMA_ABBR_ALERT
     }
 }

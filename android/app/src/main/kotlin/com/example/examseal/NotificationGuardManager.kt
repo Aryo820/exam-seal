@@ -6,19 +6,8 @@ import android.content.SharedPreferences
 import android.os.Build
 
 /**
- * Pengendali DND (Do Not Disturb) milik ExamSeal (PRD FR09).
- *
- * Perilaku dipindahkan persis dari implementasi MainActivity sebelumnya:
- * - Tidak pernah meminta/mengubah DND otomatis; [activate] gagal bila akses
- *   Notification Policy belum diberikan pengguna lewat pengaturan.
- * - Nilai filter sebelumnya dicommit sinkron SEBELUM diubah, supaya crash
- *   tidak menghilangkan data pemulihan.
- * - [restore] hanya mengembalikan nilai yang benar-benar diubah aplikasi;
- *   perubahan pengguna/aplikasi lain dihormati, tidak ditimpa.
- *
- * Arti "blokir" dibatasi jujur: meredam suara/getaran gangguan dan banner
- * pada cakupan yang didukung perangkat. Panel sistem TIDAK dijanjikan
- * tidak bisa dibuka (batas BYOD, PRD FR09).
+ * DND milik aplikasi (FR09). Tanpa auto-minta akses; commit sync sebelum ubah; pulihkan hanya milik sendiri.
+ * Meredam suara/getar/banner yang didukung; panel sistem BYOD tidak dijanjikan tertutup.
  */
 class NotificationGuardManager(context: Context) {
 
@@ -65,16 +54,12 @@ class NotificationGuardManager(context: Context) {
     private fun clearRestore(): Boolean = preferences.edit().clear().commit()
 
     /**
-     * Aktifkan kontribusi DND milik aplikasi. False bila tidak didukung,
-     * akses belum diberikan, atau filter tidak bisa diubah (mis. aturan
-     * API 35+ tidak mengizinkan perubahan langsung).
+     * False bila tak didukung, akses ditolak, atau API 35+ menolak ubah langsung.
      */
     fun activate(): Boolean {
         if (!isSupported() || !isAccessGranted()) return false
         val currentFilter = notificationManager.getCurrentInterruptionFilter()
-        // Pada target API 35+, perubahan DND aplikasi berkontribusi lewat
-        // aturan milik aplikasi; filter langsung hanya untuk perangkat
-        // lebih lama yang masih mengizinkannya.
+        // API 35+ via aturan aplikasi; perangkat lama via filter langsung.
         if (currentFilter == NotificationManager.INTERRUPTION_FILTER_ALL) {
             if (!prepareRestore(currentFilter)) return false
             try {
@@ -103,11 +88,7 @@ class NotificationGuardManager(context: Context) {
             NotificationManager.INTERRUPTION_FILTER_ALL
     }
 
-    /**
-     * Pulihkan filter yang diubah aplikasi. True hanya bila pemulihan
-     * benar-benar berhasil, agar Flutter menyediakan retry dan tidak
-     * mengaku sudah dipulihkan.
-     */
+    /** True hanya bila benar-benar pulih, agar Flutter bisa retry jujur. */
     fun restore(): Boolean {
         var restored = true
         val previous = previousFilter()

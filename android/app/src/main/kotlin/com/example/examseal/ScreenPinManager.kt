@@ -7,25 +7,8 @@ import android.os.Build
 import java.lang.ref.WeakReference
 
 /**
- * Kunci layar ExamSeal via screen pinning OS (tanpa device owner,
- * tanpa provisioning, tanpa wipe HP, tanpa izin manifest).
- *
- * Efek yang diberikan OS saat ter-pin: bilah notifikasi tidak bisa
- * ditarik, tombol Home/Recent tidak berfungsi. Satu-satunya jalan keluar
- * yang disisakan OS adalah kombinasi tahan Back+Recent — momen itu selalu
- * melewati lifecycle (pause/leaveHint) sehingga terdeteksi Flutter dan
- * dihitung sebagai pelanggaran langsung (matriks v3, PRD FR05/Q03).
- *
- * Batasan jujur:
- * - Pertama kali selalu muncul dialog persetujuan sistem yang harus
- *   ditekan pengguna. Penolakan/pembatalan berarti pin tidak aktif —
- *   Flutter wajib memverifikasi lewat [isPinned], bukan memercayai
- *   permintaan yang terkirim.
- * - Verifikasi tidak bisa sinkron sesaat setelah [requestPin] karena
- *   persetujuan bersifat asinkron; Flutter melakukan polling.
- * - Panggilan telepon dan tombol power tetap bisa menginterupsi.
- *
- * Memakai [WeakReference] agar tidak membocorkan Activity saat recreate.
+ * Screen pinning OS tanpa device owner via WeakReference. Keluar paksa via Back+Recent terdeteksi lifecycle (matriks v3).
+ * Dialog sistem pertama wajib disetujui; verifikasi via polling. Panggilan/power tetap bisa interupsi.
  */
 class ScreenPinManager(activity: Activity) {
 
@@ -49,9 +32,7 @@ class ScreenPinManager(activity: Activity) {
     fun isPinned(): Boolean {
         if (!isSupported()) return false
         return try {
-            // LOCK_TASK_MODE_PINNED = pinning tanpa device owner (kasus
-            // kita); LOCK_TASK_MODE_LOCKED = device owner (tak dipakai,
-            // tapi tetap dianggap terkunci bila entah bagaimana aktif).
+            // PINNED = tanpa device owner; LOCKED = device owner, tetap dianggap terkunci.
             when (activityManager?.lockTaskModeState) {
                 ActivityManager.LOCK_TASK_MODE_PINNED,
                 ActivityManager.LOCK_TASK_MODE_LOCKED -> true
@@ -65,10 +46,7 @@ class ScreenPinManager(activity: Activity) {
     }
 
     /**
-     * Minta OS mem-pin activity. Tanpa device owner, OS menampilkan dialog
-     * persetujuan sistem — mengembalikan true hanya berarti permintaan
-     * terkirim, BUKAN berarti sudah ter-pin. Pemanggil wajib memverifikasi
-     * lewat [isPinned] (polling) sebelum menganggap layar terkunci.
+     * True berarti permintaan terkirim, bukan sudah ter-pin. Verifikasi via [isPinned] sebelum mengunci.
      */
     fun requestPin(): Boolean {
         if (!isSupported()) return false
@@ -86,10 +64,7 @@ class ScreenPinManager(activity: Activity) {
         }
     }
 
-    /**
-     * Lepas pin. Sinkron dan tanpa dialog — hasil diverifikasi langsung.
-     * Idempoten: aman dipanggil saat tidak ter-pin.
-     */
+    /** Sinkron, tanpa dialog, terverifikasi. Idempoten. */
     fun stopPin(): Boolean {
         if (!isSupported()) return true
         val activity = activityRef.get() ?: return true

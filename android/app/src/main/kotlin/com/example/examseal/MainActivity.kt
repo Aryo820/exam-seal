@@ -11,22 +11,8 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * Activity ExamSeal — disengaja tipis.
- *
- * Tugasnya hanya:
- * - inisialisasi manager native,
- * - konfigurasi MethodChannel `examseal/protection` dan EventChannel
- *   `examseal/exam_guard_events`,
- * - meneruskan panggilan Flutter ke manager yang tepat,
- * - meneruskan window focus ke [ExamLifecycleObserver],
- * - membersihkan resource saat dihancurkan.
- *
- * TIDAK ada aturan bisnis ujian di sini: tidak ada counter, tidak ada
- * keputusan pelanggaran. Semua kebijakan milik Flutter.
- *
- * Kompatibilitas: metode lama (`checkStatus`, `activate`, `restore`,
- * `deactivate`, `openNotificationPolicySettings`) berperilaku persis
- * seperti sebelumnya.
+ * Activity tipis: teruskan Method/EventChannel ke manager. Tanpa counter/aturan pelanggaran.
+ * API lama dipertahankan persis untuk kompatibilitas Dart/test.
  */
 class MainActivity : FlutterActivity() {
 
@@ -90,10 +76,7 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
-     * Hanya dipanggil Android saat pengguna SENGAJA keluar (Home/Recent).
-     * Tidak dipanggil untuk panggilan masuk, dialog sistem/izin, maupun
-     * screen-off — diteruskan apa adanya agar Flutter bisa membedakan
-     * kepergian disengaja dari interupsi sistem (PRD FR05/Q03).
+     * Hanya untuk keluar disengaja (Home/Recent); bukan panggilan/dialog. Diteruskan mentah untuk matriks FR05.
      */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
@@ -112,7 +95,6 @@ class MainActivity : FlutterActivity() {
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
-                // ---- API lama (perilaku dipertahankan) ----
                 "checkStatus" -> result.success(checkStatus())
                 "activate" -> result.success(activate())
                 "restore", "deactivate" -> result.success(restore())
@@ -120,30 +102,24 @@ class MainActivity : FlutterActivity() {
                     openNotificationPolicySettings()
                     result.success(true)
                 }
-                // ---- Mode aman eksplisit (hanya FLAG_SECURE) ----
                 "enableSecureMode" -> result.success(secureMode.enable())
                 "disableSecureMode" -> result.success(secureMode.disable())
-                // ---- ExamGuard eksplisit (hanya monitoring) ----
                 "startExamGuard" -> result.success(examGuard.start())
                 "stopExamGuard" -> result.success(examGuard.stop())
                 "isExamGuardActive" -> result.success(examGuard.isActive())
-                // ---- Peringatan (FR10, maksimal 2000ms) ----
                 "vibrateWarning" -> {
-                    val duration = (call.argument<Number>("durationMs")?.toLong() ?: 1000L)
+                    val duration = (call.argument<Number>("durationMs")?.toLong() ?: 3000L)
                         .coerceIn(1L, WarningManager.MAX_ALERT_MS)
                     result.success(warningManager.vibrateWarning(duration))
                 }
                 "playWarningSound" -> {
-                    val duration = (call.argument<Number>("durationMs")?.toLong() ?: 2000L)
+                    val duration = (call.argument<Number>("durationMs")?.toLong() ?: 3000L)
                         .coerceIn(1L, WarningManager.MAX_ALERT_MS)
                     result.success(warningManager.playWarningSound(duration))
                 }
                 "stopWarningSound" -> result.success(warningManager.stopWarningSound())
                 "isWarningSounding" -> result.success(warningManager.isSounding())
-                // ---- Kunci layar / screen pinning (tanpa device owner) ----
-                // requestScreenPin hanya berarti permintaan terkirim;
-                // Flutter wajib verifikasi lewat isScreenPinned (polling)
-                // karena dialog persetujuan sistem bersifat asinkron.
+                // Permintaan terkirim belum berarti ter-pin; Flutter verifikasi via polling karena dialog sistem asinkron.
                 "requestScreenPin" -> result.success(screenPin.requestPin())
                 "stopScreenPin" -> result.success(screenPin.stopPin())
                 "isScreenPinned" -> result.success(screenPin.isPinned())
@@ -176,9 +152,7 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
-     * Perilaku persis seperti sebelumnya: FLAG_SECURE + kontribusi DND
-     * milik aplikasi, terverifikasi. False bila akses Notification Policy
-     * belum diberikan — readiness harus gagal dan tombol mulai nonaktif.
+     * FLAG_SECURE + DND milik aplikasi, terverifikasi. False bila akses Policy belum diberikan.
      */
     private fun activate(): Boolean {
         if (!isSupported() || !notificationGuard.isAccessGranted()) {
@@ -196,10 +170,7 @@ class MainActivity : FlutterActivity() {
         return verified
     }
 
-    /**
-     * Perilaku persis seperti sebelumnya: lepas FLAG_SECURE dan pulihkan
-     * pengaturan notifikasi yang diubah aplikasi.
-     */
+    /** Lepas FLAG_SECURE dan pulihkan DND yang diubah aplikasi. */
     private fun restore(): Boolean {
         val secureRestored = secureMode.disable()
         val dndRestored = notificationGuard.restore()

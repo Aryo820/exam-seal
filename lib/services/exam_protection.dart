@@ -62,8 +62,8 @@ class ExamProtection implements ExamProtectionBridge {
   static const _channel = MethodChannel('examseal/protection');
   static const _events = EventChannel('examseal/exam_guard_events');
 
-  /// Batas FR10: peringatan maksimal dua detik per pelanggaran.
-  static const maxAlertMs = 2000;
+  /// Batas FR10: peringatan maksimal tiga detik per pelanggaran.
+  static const maxAlertMs = 3000;
 
   final void Function(String message)? _onLog;
 
@@ -205,7 +205,7 @@ class ExamProtection implements ExamProtectionBridge {
 
   /// Getarkan peringatan sekali. Durasi dijepit ke 1..[maxAlertMs].
   /// False bila perangkat tidak bisa bergetar — bukan error fatal.
-  Future<bool> vibrateWarning({int durationMs = 1000}) async {
+  Future<bool> vibrateWarning({int durationMs = 3000}) async {
     final capped = durationMs.clamp(1, maxAlertMs);
     final ok = await _invoke<bool>('vibrateWarning', {'durationMs': capped});
     return ok == true;

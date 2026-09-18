@@ -453,14 +453,14 @@ class _ExamAppState extends State<ExamApp> with WidgetsBindingObserver {
   }
 
   /// Peringatan native per hitungan baru (FR10: getar + bunyi singkat,
-  /// masing-masing maksimal dua detik). Best-effort penuh: perangkat yang
+  /// masing-masing maksimal tiga detik). Best-effort penuh: perangkat yang
   /// tidak mendukung tetap menampilkan peringatan visual; kegagalan tidak
   /// pernah melempar ke UI.
   Future<void> _playNativeWarningAlert() async {
     final protection = controller.protection;
     if (protection is! ExamProtection) return;
     try {
-      await protection.vibrateWarning(durationMs: 1000);
+      await protection.vibrateWarning(durationMs: 3000);
     } catch (_) {
       // Abaikan: lanjut ke bunyi, lalu selesai diam-diam.
     }

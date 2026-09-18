@@ -103,7 +103,7 @@ void main() {
         });
     final protection = ExamProtection();
 
-    // Melebihi 2000ms harus dijepit, bukan diteruskan mentah.
+    // Melebihi 3000ms harus dijepit, bukan diteruskan mentah.
     expect(await protection.vibrateWarning(durationMs: 5000), isTrue);
     expect((lastArgs as Map)['durationMs'], ExamProtection.maxAlertMs);
     expect(await protection.playWarningSound(durationMs: 5000), isTrue);

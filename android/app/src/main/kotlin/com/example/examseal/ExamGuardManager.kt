@@ -5,15 +5,8 @@ import android.os.Looper
 import io.flutter.plugin.common.EventChannel
 
 /**
- * Gerbang monitoring ExamGuard (bagian 7 spesifikasi).
- *
- * - Monitoring HANYA aktif saat Exam Mode aktif: [startExamGuard] /
- *   [stopExamGuard], keduanya idempoten (start 2x tidak mendaftarkan
- *   observer ganda, stop saat sudah berhenti tidak crash).
- * - Meneruskan sinyal mentah [ExamLifecycleObserver] ke Flutter lewat
- *   EventChannel. Tidak ada penilaian "curang" di sini.
- * - Event berformat map: {type, atMillis, detail?} agar Flutter punya
- *   cukup konteks untuk klasifikasi (bagian 6 spesifikasi).
+ * Monitoring mentah ke Flutter via EventChannel; aktif hanya saat Exam Mode. Idempoten, tanpa vonis.
+ * Event: map {type, atMillis, detail?}.
  */
 class ExamGuardManager {
 
@@ -27,13 +20,9 @@ class ExamGuardManager {
 
     val observer = ExamLifecycleObserver { type, detail -> emit(type, detail) }
 
-    /** True bila monitoring sedang aktif. */
     fun isActive(): Boolean = active
 
-    /**
-     * Nyalakan monitoring. Idempoten: panggilan berulang mengembalikan
-     * true tanpa efek ganda.
-     */
+    /** Idempoten: panggilan berulang tanpa efek ganda. */
     fun start(): Boolean {
         val wasActive = active
         active = true
@@ -42,9 +31,7 @@ class ExamGuardManager {
         return true
     }
 
-    /**
-     * Matikan monitoring. Idempoten: aman dipanggil saat sudah berhenti.
-     */
+    /** Idempoten: aman dipanggil saat sudah berhenti. */
     fun stop(): Boolean {
         val wasActive = active
         active = false
